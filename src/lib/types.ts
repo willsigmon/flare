@@ -18,6 +18,7 @@ export interface TrendingItem {
   id: string;
   platform: Platform;
   title: string;
+  originalTitle?: string; // Original title before enhancement (for vague/clickbait titles)
   subtitle?: string;
   description?: string;
   url?: string;

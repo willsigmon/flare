@@ -1,6 +1,160 @@
 import { TrendingItem, TrendingSection, PulsePost, Platform } from './types';
 
 // =============================================================================
+// Title Enhancement - Make vague/clickbait titles more informative
+// =============================================================================
+
+// Patterns that indicate a vague or clickbait title
+const vaguePatterns = [
+  /^(this|these|that|those)\s+/i,
+  /^(why|how|what)\s+(everyone|everybody|people|we|they|you)\s+(is|are|should)/i,
+  /^(the\s+)?(truth|secret|reason|thing|way)\s+(about|behind|to)/i,
+  /\.\.\.$/, // Trailing ellipsis
+  /^#\w+\s*[-–—]\s*/, // Hashtag with separator
+  /^(breaking|update|alert)[:!]?\s*/i,
+  /you (won't|wont|will never|need to) (believe|know|see|hear)/i,
+  /(everyone|they) (don't|doesn't|didn't) want you to (know|see)/i,
+  /what (happened|happens) (next|when)/i,
+  /(changed|changes) everything/i,
+  /actually works/i,
+  /taking over/i,
+  /went viral/i,
+  /blew up/i,
+  /here's what/i,
+];
+
+// Words that indicate specificity (title is probably fine)
+const specificityIndicators = [
+  /\d{4}/, // Year (e.g., "2025")
+  /\$[\d,]+/, // Dollar amounts
+  /\d+%/, // Percentages
+  /\b(v\d|version\s*\d)/i, // Version numbers
+  /\b(gpt-?\d|claude|llama|gemini|openai|google|apple|microsoft|meta|amazon)/i, // Company/product names
+  /\b(react|vue|angular|swift|rust|python|javascript|typescript)/i, // Tech names
+  /\b(senate|congress|supreme court|president|governor)/i, // Political terms
+  /\b(ceo|cto|founder)\s+of/i, // Leadership titles
+];
+
+// Check if title needs enhancement
+function isTitleVague(title: string): boolean {
+  // If title has specific indicators, it's probably fine
+  if (specificityIndicators.some(pattern => pattern.test(title))) {
+    return false;
+  }
+
+  // Check for vague patterns
+  return vaguePatterns.some(pattern => pattern.test(title));
+}
+
+// Extract key context from description or subtitle
+function extractContext(text: string): string | null {
+  if (!text || text.length < 10) return null;
+
+  // Clean up the text
+  const cleaned = text
+    .replace(/https?:\/\/[^\s]+/g, '') // Remove URLs
+    .replace(/[^\w\s.,!?-]/g, ' ') // Remove special chars
+    .trim();
+
+  // Try to find a meaningful phrase (first sentence or clause)
+  const firstSentence = cleaned.split(/[.!?]/)[0]?.trim();
+  if (firstSentence && firstSentence.length > 15 && firstSentence.length < 100) {
+    return firstSentence;
+  }
+
+  // Fall back to first chunk
+  const words = cleaned.split(/\s+/).slice(0, 8);
+  if (words.length >= 3) {
+    return words.join(' ');
+  }
+
+  return null;
+}
+
+// Enhance a vague title with context
+function enhanceTitle(item: TrendingItem): string {
+  const { title, description, subtitle, category, platform } = item;
+
+  // If title isn't vague, return as-is
+  if (!isTitleVague(title)) {
+    return title;
+  }
+
+  // Try to extract context from available fields
+  const descContext = extractContext(description || '');
+  const subContext = extractContext(subtitle || '');
+
+  // Clean the original title
+  let cleanedTitle = title
+    .replace(/^#\w+\s*[-–—]\s*/, '') // Remove hashtag prefix
+    .replace(/^(breaking|update|alert)[:!]?\s*/i, '')
+    .replace(/\.\.\.$/, '')
+    .trim();
+
+  // Strategy 1: Use description context if available and meaningful
+  if (descContext && descContext.length > 20) {
+    // If description is more specific, use it
+    if (!isTitleVague(descContext)) {
+      return descContext.length > 80 ? descContext.slice(0, 80) + '...' : descContext;
+    }
+  }
+
+  // Strategy 2: Prepend category/topic if it adds clarity
+  if (category && category !== 'Trending' && !cleanedTitle.toLowerCase().includes(category.toLowerCase())) {
+    // Check if subtitle has useful context (like subreddit or publication name)
+    if (subContext) {
+      // Extract publication/subreddit name
+      const pubMatch = subtitle?.match(/^([^•·\-]+)/);
+      if (pubMatch && pubMatch[1].trim().length > 2) {
+        const pub = pubMatch[1].trim();
+        // Don't add generic prefixes
+        if (!['News', 'Trending', '@trending', '@explore'].includes(pub)) {
+          return `${pub}: ${cleanedTitle}`;
+        }
+      }
+    }
+
+    // Use category as prefix
+    return `${category}: ${cleanedTitle}`;
+  }
+
+  // Strategy 3: Add platform context for very vague titles
+  if (cleanedTitle.length < 40) {
+    const platformNames: Record<Platform, string> = {
+      reddit: 'Reddit',
+      hackernews: 'HN',
+      twitter: 'X',
+      youtube: 'YouTube',
+      google: 'Trending',
+      bluesky: 'Bluesky',
+      threads: 'Threads',
+      instagram: 'Instagram',
+      facebook: 'Facebook',
+      linkedin: 'LinkedIn',
+      tiktok: 'TikTok',
+      substack: 'Substack',
+      medium: 'Medium',
+      local: 'Local',
+    };
+
+    if (category && category !== 'Trending') {
+      return `${category} ${platformNames[platform] || ''}: ${cleanedTitle}`;
+    }
+  }
+
+  return cleanedTitle || title;
+}
+
+// Apply title enhancement to all items
+function enhanceTitles(items: TrendingItem[]): TrendingItem[] {
+  return items.map(item => ({
+    ...item,
+    title: enhanceTitle(item),
+    originalTitle: item.title, // Preserve original for tooltip/fallback
+  }));
+}
+
+// =============================================================================
 // Image fallback generator - Creates visually rich images from titles
 // Uses placeholder services when no image is available
 // =============================================================================
@@ -184,41 +338,44 @@ async function fetchYouTubeTrends(): Promise<TrendingItem[]> {
       {
         id: 'yt-1',
         platform: 'youtube',
-        title: 'The TRUTH About AI in 2025',
+        title: 'GPT-5 vs Claude 4: Which AI Model Wins in 2025?',
         subtitle: 'Tech Vision • 4.2M views',
+        description: 'A comprehensive comparison of the latest AI models from OpenAI and Anthropic, testing coding, reasoning, and creative tasks.',
         url: 'https://youtube.com/watch?v=placeholder1',
         rank: 1,
         engagementCount: 4200000,
         engagementLabel: 'views',
         timestamp: new Date(Date.now() - 3600000 * 8),
         category: 'Technology',
-        imageUrl: generateFallbackImage('The TRUTH About AI in 2025', 'youtube'),
+        imageUrl: generateFallbackImage('GPT-5 vs Claude 4 AI Comparison', 'youtube'),
       },
       {
         id: 'yt-2',
         platform: 'youtube',
-        title: 'Why Everyone Is Switching To This',
+        title: 'iPhone 17 Pro Max Full Review: Apple Silicon M5 Changes Mobile Computing',
         subtitle: 'Digital Trends • 2.1M views',
+        description: 'Apple brings desktop-class performance to mobile with the M5 chip in the new iPhone 17 Pro Max.',
         url: 'https://youtube.com/watch?v=placeholder2',
         rank: 2,
         engagementCount: 2100000,
         engagementLabel: 'views',
         timestamp: new Date(Date.now() - 3600000 * 12),
         category: 'Technology',
-        imageUrl: generateFallbackImage('Why Everyone Is Switching To This', 'youtube'),
+        imageUrl: generateFallbackImage('iPhone 17 Pro Max Review', 'youtube'),
       },
       {
         id: 'yt-3',
         platform: 'youtube',
-        title: 'This Changes Everything We Know',
+        title: 'NASA Confirms Water Ice on Mars Equator - What This Means for Colonization',
         subtitle: 'Future Tech • 1.8M views',
+        description: 'New satellite data reveals massive underground ice deposits near the Mars equator, revolutionizing colonization plans.',
         url: 'https://youtube.com/watch?v=placeholder3',
         rank: 3,
         engagementCount: 1800000,
         engagementLabel: 'views',
         timestamp: new Date(Date.now() - 3600000 * 18),
         category: 'Science',
-        imageUrl: generateFallbackImage('This Changes Everything We Know', 'youtube'),
+        imageUrl: generateFallbackImage('NASA Mars Water Ice Discovery', 'youtube'),
       },
     ];
   }
@@ -442,9 +599,10 @@ function getTwitterTrends(): TrendingItem[] {
     ensureImage({
       id: 'twitter-1',
       platform: 'twitter',
-      title: '#TechNews - Major announcements expected',
+      title: 'Google I/O 2025: Android 16, Gemini 2 Pro, and Pixel Fold 2 Announced',
       subtitle: 'Technology · Trending',
-      url: 'https://twitter.com/search?q=%23TechNews',
+      description: 'Google unveils major updates including Android 16 with AI-first design, Gemini 2 Pro model, and the foldable Pixel Fold 2.',
+      url: 'https://twitter.com/search?q=%23GoogleIO',
       rank: 1,
       engagementCount: 185000,
       engagementLabel: 'posts',
@@ -454,9 +612,10 @@ function getTwitterTrends(): TrendingItem[] {
     ensureImage({
       id: 'twitter-2',
       platform: 'twitter',
-      title: '#AI - The next frontier in computing',
+      title: 'OpenAI Releases GPT-5 Turbo: 10x Faster, 50% Cheaper Than GPT-4',
       subtitle: 'Technology · Trending',
-      url: 'https://twitter.com/search?q=%23AI',
+      description: 'Sam Altman announces GPT-5 Turbo with dramatically improved speed and cost efficiency.',
+      url: 'https://twitter.com/search?q=%23GPT5',
       rank: 2,
       engagementCount: 142000,
       engagementLabel: 'posts',
@@ -466,9 +625,10 @@ function getTwitterTrends(): TrendingItem[] {
     ensureImage({
       id: 'twitter-3',
       platform: 'twitter',
-      title: '#Breaking - Live updates worldwide',
+      title: 'EU Passes Landmark AI Regulation: What Companies Need to Know',
       subtitle: 'News · Trending',
-      url: 'https://twitter.com/search?q=%23Breaking',
+      description: 'European Parliament approves comprehensive AI Act with strict requirements for high-risk systems.',
+      url: 'https://twitter.com/search?q=%23AIAct',
       rank: 3,
       engagementCount: 98000,
       engagementLabel: 'posts',
@@ -486,8 +646,9 @@ function getThreadsTrends(): TrendingItem[] {
     ensureImage({
       id: 'threads-1',
       platform: 'threads',
-      title: 'Design Inspiration for 2025',
+      title: 'Apple Design Award 2025 Winners: 6 Apps That Set New UI Standards',
       subtitle: '@threads • Design · Popular',
+      description: 'Apple announces this years Design Award winners at WWDC, highlighting innovations in accessibility and spatial design.',
       url: 'https://threads.net/search?q=design',
       rank: 1,
       engagementCount: 45000,
@@ -498,14 +659,15 @@ function getThreadsTrends(): TrendingItem[] {
     ensureImage({
       id: 'threads-2',
       platform: 'threads',
-      title: 'Photography Tips and Tricks',
+      title: 'iPhone 17 ProRAW vs Sony A7V: Pro Photographer Side-by-Side Comparison',
       subtitle: '@threads • Art · Popular',
+      description: 'Professional photographer tests the new iPhone 17 camera against a $2500 mirrorless camera in various conditions.',
       url: 'https://threads.net/search?q=photography',
       rank: 2,
       engagementCount: 32000,
       engagementLabel: 'likes',
       timestamp: new Date(),
-      category: 'Art',
+      category: 'Photography',
     }),
   ];
 }
@@ -518,20 +680,22 @@ function getInstagramTrends(): TrendingItem[] {
     ensureImage({
       id: 'ig-1',
       platform: 'instagram',
-      title: 'Viral Reels: Dance Challenge Takes Over',
+      title: 'Zendaya MET Gala 2025 Look: Robot-Inspired Balenciaga Gown Goes Viral',
       subtitle: '@trending • 2.3M plays',
+      description: 'Zendaya arrives at the MET Gala in a stunning robotic-themed Balenciaga creation.',
       url: 'https://instagram.com/explore',
       rank: 1,
       engagementCount: 2300000,
       engagementLabel: 'plays',
       timestamp: new Date(Date.now() - 3600000 * 3),
-      category: 'Entertainment',
+      category: 'Fashion',
     }),
     ensureImage({
       id: 'ig-2',
       platform: 'instagram',
-      title: 'Travel Photography: Hidden Gems',
+      title: 'Faroe Islands Waterfall Hike: Photographer Captures New Angle of Múlafossur',
       subtitle: '@explore • 890K likes',
+      description: 'Stunning new perspective of the famous Múlafossur waterfall shot with drone in golden hour.',
       url: 'https://instagram.com/explore',
       rank: 2,
       engagementCount: 890000,
@@ -542,8 +706,9 @@ function getInstagramTrends(): TrendingItem[] {
     ensureImage({
       id: 'ig-3',
       platform: 'instagram',
-      title: 'Food Trends: What Everyone Is Eating',
+      title: 'Dubai Chocolate Bar Recipe: How to Make the Viral Pistachio Treat at Home',
       subtitle: '@food • 650K likes',
+      description: 'Step-by-step guide to recreating the $30 Dubai chocolate bar with pistachio knafeh filling.',
       url: 'https://instagram.com/explore',
       rank: 3,
       engagementCount: 650000,
@@ -562,8 +727,9 @@ function getFacebookTrends(): TrendingItem[] {
     ensureImage({
       id: 'fb-1',
       platform: 'facebook',
-      title: 'Breaking: Major news story developing',
+      title: 'Hurricane Maria Category 5: Florida Keys Under Mandatory Evacuation',
       subtitle: 'News • 45K shares',
+      description: 'Governor DeSantis declares state of emergency as Cat 5 hurricane approaches the Florida Keys.',
       url: 'https://facebook.com',
       rank: 1,
       engagementCount: 45000,
@@ -574,8 +740,9 @@ function getFacebookTrends(): TrendingItem[] {
     ensureImage({
       id: 'fb-2',
       platform: 'facebook',
-      title: 'Community spotlight: Local heroes',
+      title: 'Texas Teacher Raises $2.4M for Students Lunch Debt Across 47 Schools',
       subtitle: 'Community • 28K reactions',
+      description: 'Elementary school teacher fundraising campaign erases lunch debt for over 15,000 students.',
       url: 'https://facebook.com',
       rank: 2,
       engagementCount: 28000,
@@ -594,8 +761,9 @@ function getLinkedInTrends(): TrendingItem[] {
     ensureImage({
       id: 'li-1',
       platform: 'linkedin',
-      title: 'Remote work trends reshaping industries',
+      title: 'Microsoft Mandates 3 Days/Week In-Office: 50,000 Employees Affected',
       subtitle: 'Business • 12K reactions',
+      description: 'Microsoft reverses remote work policy, requiring hybrid schedule starting Q2 2025.',
       url: 'https://linkedin.com/news',
       rank: 1,
       engagementCount: 12000,
@@ -606,8 +774,9 @@ function getLinkedInTrends(): TrendingItem[] {
     ensureImage({
       id: 'li-2',
       platform: 'linkedin',
-      title: 'AI skills most in-demand for 2025',
+      title: 'LinkedIn 2025 Jobs Report: Prompt Engineers See 400% Salary Growth',
       subtitle: 'Careers • 8.5K reactions',
+      description: 'Annual jobs report reveals AI-related roles dominating salary growth across all industries.',
       url: 'https://linkedin.com/news',
       rank: 2,
       engagementCount: 8500,
@@ -738,8 +907,9 @@ function getTikTokTrends(): TrendingItem[] {
     ensureImage({
       id: 'tt-1',
       platform: 'tiktok',
-      title: 'New dance trend taking over For You',
+      title: 'Kendrick Lamar "GNX" Dance Challenge Hits 500M Combined Views',
       subtitle: '@tiktok • 15M views',
+      description: 'The viral dance to Kendrick new track continues to dominate TikTok across multiple creators.',
       url: 'https://tiktok.com/foryou',
       rank: 1,
       engagementCount: 15000000,
@@ -750,26 +920,28 @@ function getTikTokTrends(): TrendingItem[] {
     ensureImage({
       id: 'tt-2',
       platform: 'tiktok',
-      title: 'Life hack that actually works',
+      title: 'Tesla FSD V13 Test: Creator Drives LA to San Francisco Hands-Free',
       subtitle: '@viral • 8.2M views',
+      description: 'A Tesla owner documents their full 380-mile trip using Full Self-Driving version 13.',
       url: 'https://tiktok.com/foryou',
       rank: 2,
       engagementCount: 8200000,
       engagementLabel: 'views',
       timestamp: new Date(Date.now() - 3600000 * 4),
-      category: 'Lifestyle',
+      category: 'Technology',
     }),
     ensureImage({
       id: 'tt-3',
       platform: 'tiktok',
-      title: 'Behind the scenes: How it\'s made',
+      title: 'Factory Tour: How Nike Air Jordan 1s Are Made in 2025',
       subtitle: '@howto • 5.6M views',
+      description: 'Exclusive behind-the-scenes look at Nike latest manufacturing facility producing Air Jordan 1 sneakers.',
       url: 'https://tiktok.com/foryou',
       rank: 3,
       engagementCount: 5600000,
       engagementLabel: 'views',
       timestamp: new Date(Date.now() - 3600000 * 8),
-      category: 'Education',
+      category: 'Fashion',
     }),
   ];
 }
@@ -982,10 +1154,13 @@ export async function fetchUnifiedFeed(): Promise<TrendingItem[]> {
   });
 
   // Re-assign ranks
-  return sortedItems.map((item, index) => ({
+  const rankedItems = sortedItems.map((item, index) => ({
     ...item,
     rank: index + 1,
   }));
+
+  // Enhance vague titles with contextual information
+  return enhanceTitles(rankedItems);
 }
 
 // Export platform weights for UI display
