@@ -1,0 +1,1 @@
+export { FilterableFeed } from './FilterableFeed';
