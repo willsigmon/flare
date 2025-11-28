@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/components/auth";
 import { VoteProvider } from "@/components/voting/VoteButtons";
 import { PreferencesProvider } from "@/components/preferences/PreferencesProvider";
+import { ReaderSettingsProvider } from "@/components/reader/ReaderSettings";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,9 +33,11 @@ export default function RootLayout({
       >
         <AuthProvider>
           <PreferencesProvider>
-            <VoteProvider>
-              {children}
-            </VoteProvider>
+            <ReaderSettingsProvider>
+              <VoteProvider>
+                {children}
+              </VoteProvider>
+            </ReaderSettingsProvider>
           </PreferencesProvider>
         </AuthProvider>
       </body>

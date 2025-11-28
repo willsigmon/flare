@@ -91,14 +91,14 @@ export function SpotlightCard({ item }: SpotlightCardProps) {
       />
 
       {/* Main card */}
-      <div className="relative rounded-3xl overflow-hidden bg-bg-primary">
+      <div className="relative rounded-3xl overflow-hidden bg-bg-primary img-hover">
         {/* Background image */}
         {hasImage && (
           <div className="absolute inset-0">
             <img
               src={item.imageUrl}
               alt=""
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-black/30" />
           </div>
@@ -129,7 +129,7 @@ export function SpotlightCard({ item }: SpotlightCardProps) {
             <div className="flex items-center gap-3">
               <div className="relative">
                 <div
-                  className="w-16 h-16 md:w-20 md:h-20 rounded-2xl flex items-center justify-center font-black text-3xl md:text-4xl text-white shadow-2xl"
+                  className="w-16 h-16 md:w-20 md:h-20 rounded-2xl flex items-center justify-center font-black text-3xl md:text-4xl text-white shadow-2xl rank-shine badge-hover"
                   style={{
                     background: 'linear-gradient(135deg, #f97316 0%, #ec4899 50%, #8b5cf6 100%)',
                   }}

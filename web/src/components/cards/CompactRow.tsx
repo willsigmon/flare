@@ -49,7 +49,7 @@ export function CompactRow({ item, rank }: CompactRowProps) {
   };
 
   return (
-    <article className="group relative flex items-center gap-3 py-2.5 px-3 hover:bg-bg-tertiary/40 transition-colors rounded-lg mx-1 cursor-pointer" onClick={handleClick}>
+    <article className="group relative flex items-center gap-3 py-2.5 px-3 transition-colors rounded-lg mx-1 cursor-pointer row-hover" onClick={handleClick}>
       {/* Rank number */}
       {rank !== undefined && (
         <span className="w-6 text-sm font-semibold text-text-tertiary text-right flex-shrink-0 tabular-nums">
@@ -103,7 +103,7 @@ export function CompactRow({ item, rank }: CompactRowProps) {
 
       {/* Thumbnail */}
       {hasImage && (
-        <div className="flex-shrink-0 w-16 h-10 rounded-md overflow-hidden bg-bg-tertiary">
+        <div className="flex-shrink-0 w-16 h-10 rounded-md overflow-hidden bg-bg-tertiary img-hover">
           <img
             src={item.imageUrl}
             alt=""

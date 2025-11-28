@@ -16,6 +16,11 @@ import {
 } from '@/components/icons/PlatformIcons';
 import { VoteButtons } from '@/components/voting/VoteButtons';
 import { ShareButtons } from '@/components/social/ShareButtons';
+import { detectMediaType, MediaInfo, getMediaTypeLabel } from '@/lib/mediaDetection';
+import { ReaderView, ReaderSettingsPanel, useReaderSettings } from '@/components/reader';
+import { YouTubePlayer } from '@/components/video';
+import { AudioPlayer } from '@/components/audio';
+import { HeatBadge, getHoursOld } from '@/components/community';
 
 interface Comment {
   id: string;
@@ -28,7 +33,7 @@ interface Comment {
   platform: 'reddit' | 'hackernews';
 }
 
-type TabType = 'overview' | 'comments';
+type TabType = 'overview' | 'read' | 'video' | 'audio' | 'comments' | 'settings';
 
 function detectCategory(title: string): Category {
   const titleLower = title.toLowerCase();
@@ -61,9 +66,8 @@ function CommentThread({ comment, isLast = false }: { comment: Comment; isLast?:
   const [collapsed, setCollapsed] = useState(false);
   const platformColor = comment.platform === 'reddit' ? '#ff4500' : '#ff6600';
 
-  // Clean up HTML entities and basic markdown
   const cleanContent = decodeHtmlEntities(comment.content)
-    .replace(/<[^>]*>/g, '') // Remove HTML tags
+    .replace(/<[^>]*>/g, '')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
@@ -72,7 +76,6 @@ function CommentThread({ comment, isLast = false }: { comment: Comment; isLast?:
   return (
     <div className={`${comment.depth > 0 ? 'ml-4 pl-4 border-l-2 border-border/50' : ''}`}>
       <div className="py-3">
-        {/* Comment header */}
         <div className="flex items-center gap-2 mb-2">
           <button
             onClick={() => setCollapsed(!collapsed)}
@@ -84,23 +87,16 @@ function CommentThread({ comment, isLast = false }: { comment: Comment; isLast?:
             {comment.author}
           </span>
           {comment.score > 0 && (
-            <span className="text-xs text-text-muted">
-              {comment.score} points
-            </span>
+            <span className="text-xs text-text-muted">{comment.score} points</span>
           )}
-          <span className="text-xs text-text-muted">
-            {formatCommentTime(comment.timestamp)}
-          </span>
+          <span className="text-xs text-text-muted">{formatCommentTime(comment.timestamp)}</span>
         </div>
 
-        {/* Comment body */}
         {!collapsed && (
           <>
             <div className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">
               {cleanContent}
             </div>
-
-            {/* Nested replies */}
             {comment.replies.length > 0 && (
               <div className="mt-2">
                 {comment.replies.map((reply, idx) => (
@@ -127,7 +123,6 @@ function CommentsSection({ storyId, platform }: { storyId: string; platform: str
 
   useEffect(() => {
     async function fetchComments() {
-      // Only fetch for Reddit and HN
       if (platform !== 'reddit' && platform !== 'hackernews') {
         setLoading(false);
         setError('Comments not available for this platform');
@@ -136,12 +131,8 @@ function CommentsSection({ storyId, platform }: { storyId: string; platform: str
 
       try {
         setLoading(true);
-        const response = await fetch(
-          `/api/story/comments?platform=${platform}&id=${storyId}`
-        );
-
+        const response = await fetch(`/api/story/comments?platform=${platform}&id=${storyId}`);
         if (!response.ok) throw new Error('Failed to fetch comments');
-
         const data = await response.json();
         setComments(data.comments || []);
       } catch (err) {
@@ -185,31 +176,82 @@ function CommentsSection({ storyId, platform }: { storyId: string; platform: str
   return (
     <div className="divide-y divide-border/30">
       {comments.map((comment, idx) => (
-        <CommentThread
-          key={comment.id}
-          comment={comment}
-          isLast={idx === comments.length - 1}
-        />
+        <CommentThread key={comment.id} comment={comment} isLast={idx === comments.length - 1} />
       ))}
     </div>
+  );
+}
+
+// Tab icons
+function ReadIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+    </svg>
+  );
+}
+
+function VideoIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+function AudioIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+    </svg>
+  );
+}
+
+function SettingsIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
   );
 }
 
 export function StoryPreviewModal() {
   const { previewItem, closePreview, isOpen } = useStoryPreview();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [mediaInfo, setMediaInfo] = useState<MediaInfo>({ type: 'article' });
+  const [showReaderSettings, setShowReaderSettings] = useState(false);
 
-  // Reset tab when item changes
+  // Detect media type when item changes
   useEffect(() => {
-    if (previewItem) {
+    if (previewItem?.url) {
+      const info = detectMediaType(previewItem.url);
+      setMediaInfo(info);
+      // Auto-select appropriate tab based on media type
+      if (info.type === 'video' && info.videoId) {
+        setActiveTab('video');
+      } else if (info.type === 'audio') {
+        setActiveTab('audio');
+      } else {
+        setActiveTab('overview');
+      }
+    } else {
       setActiveTab('overview');
+      setMediaInfo({ type: 'article' });
     }
   }, [previewItem]);
 
   // Handle escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closePreview();
+      if (e.key === 'Escape') {
+        if (showReaderSettings) {
+          setShowReaderSettings(false);
+        } else {
+          closePreview();
+        }
+      }
     };
 
     if (isOpen) {
@@ -221,7 +263,7 @@ export function StoryPreviewModal() {
       document.removeEventListener('keydown', handleEscape);
       document.body.style.overflow = '';
     };
-  }, [isOpen, closePreview]);
+  }, [isOpen, closePreview, showReaderSettings]);
 
   if (!isOpen || !previewItem) return null;
 
@@ -231,10 +273,8 @@ export function StoryPreviewModal() {
   const categoryColor = categoryColors[category];
   const hasImage = previewItem.imageUrl && previewItem.imageUrl.length > 0;
 
-  // Extract story ID for comments
   const getStoryId = () => {
     if (previewItem.platform === 'reddit') {
-      // Reddit URLs: reddit.com/r/subreddit/comments/{id}/...
       const match = previewItem.url?.match(/comments\/([a-z0-9]+)/i);
       return match?.[1] || previewItem.id;
     }
@@ -242,50 +282,48 @@ export function StoryPreviewModal() {
   };
 
   const supportsComments = previewItem.platform === 'reddit' || previewItem.platform === 'hackernews';
+  const isVideo = mediaInfo.type === 'video' && mediaInfo.videoId;
+  const isAudio = mediaInfo.type === 'audio';
+  const isArticle = mediaInfo.type === 'article';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-        onClick={closePreview}
-      />
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={closePreview} />
 
       {/* Modal */}
-      <div className="relative z-10 w-full h-full md:w-[95vw] md:h-[95vh] md:max-w-5xl md:rounded-2xl bg-bg-primary shadow-2xl border border-border overflow-hidden flex flex-col">
+      <div className="relative z-10 w-full h-full md:w-[95vw] md:h-[95vh] md:max-w-6xl md:rounded-2xl bg-bg-primary shadow-2xl border border-border overflow-hidden flex flex-col">
         {/* Hero Header */}
         <div className="relative flex-shrink-0">
-          {/* Background */}
           <div className="absolute inset-0 h-48">
             {hasImage ? (
               <>
-                <img
-                  src={previewItem.imageUrl}
-                  alt=""
-                  className="w-full h-full object-cover"
-                />
+                <img src={previewItem.imageUrl} alt="" className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-bg-primary via-bg-primary/80 to-transparent" />
               </>
             ) : (
               <div
                 className="w-full h-full"
-                style={{
-                  background: `linear-gradient(135deg, ${categoryColor}40 0%, ${categoryColor}10 100%)`,
-                }}
+                style={{ background: `linear-gradient(135deg, ${categoryColor}40 0%, ${categoryColor}10 100%)` }}
               />
             )}
           </div>
 
-          {/* Header content */}
           <div className="relative px-6 pt-4 pb-6">
-            {/* Top row - Close & Actions */}
+            {/* Top row */}
             <div className="flex items-center justify-between mb-8">
-              <div
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium"
-                style={{ backgroundColor: `${color}20`, color }}
-              >
-                <PlatformIcon platform={previewItem.platform} size={16} />
-                <span>{config?.name}</span>
+              <div className="flex items-center gap-2">
+                <div
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium"
+                  style={{ backgroundColor: `${color}20`, color }}
+                >
+                  <PlatformIcon platform={previewItem.platform} size={16} />
+                  <span>{config?.name}</span>
+                </div>
+                {/* Media type badge */}
+                <div className="px-2 py-1 rounded-full bg-bg-tertiary text-xs font-medium text-text-secondary">
+                  {getMediaTypeLabel(mediaInfo.type)}
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
@@ -314,16 +352,20 @@ export function StoryPreviewModal() {
             </h1>
 
             {/* Meta row */}
-            <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-2">
                 <FireIcon size={18} className="text-orange-500" />
                 <span className="font-bold text-text-primary">
                   {formatEngagement(previewItem.engagementCount || 0)}
                 </span>
-                <span className="text-text-secondary">
-                  {previewItem.engagementLabel || 'points'}
-                </span>
+                <span className="text-text-secondary">{previewItem.engagementLabel || 'points'}</span>
               </div>
+
+              <HeatBadge
+                engagementCount={previewItem.engagementCount || 0}
+                hoursOld={getHoursOld(previewItem.timestamp)}
+                size="sm"
+              />
 
               {previewItem.subtitle && (
                 <>
@@ -339,22 +381,26 @@ export function StoryPreviewModal() {
               <span className="text-text-secondary">{timeAgo(previewItem.timestamp)}</span>
 
               <div className="flex items-center gap-2 ml-auto">
-                <VoteButtons itemId={previewItem.id} variant="compact" />
-                <ShareButtons
-                  url={previewItem.url || ''}
-                  title={previewItem.title}
+                <VoteButtons
+                  itemId={previewItem.id}
                   variant="compact"
+                  showFlareScore={true}
+                  platform={previewItem.platform}
+                  category={category}
+                  title={previewItem.title}
+                  url={previewItem.url}
                 />
+                <ShareButtons url={previewItem.url || ''} title={previewItem.title} variant="compact" />
               </div>
             </div>
           </div>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center gap-1 px-6 border-b border-border bg-bg-secondary/50 flex-shrink-0">
+        <div className="flex items-center gap-1 px-6 border-b border-border bg-bg-secondary/50 flex-shrink-0 overflow-x-auto">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
               activeTab === 'overview'
                 ? 'text-accent-brand border-accent-brand'
                 : 'text-text-secondary border-transparent hover:text-text-primary'
@@ -362,10 +408,53 @@ export function StoryPreviewModal() {
           >
             Overview
           </button>
+
+          {isArticle && (
+            <button
+              onClick={() => setActiveTab('read')}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
+                activeTab === 'read'
+                  ? 'text-accent-brand border-accent-brand'
+                  : 'text-text-secondary border-transparent hover:text-text-primary'
+              }`}
+            >
+              <ReadIcon className="w-4 h-4" />
+              <span>Read</span>
+            </button>
+          )}
+
+          {isVideo && (
+            <button
+              onClick={() => setActiveTab('video')}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
+                activeTab === 'video'
+                  ? 'text-accent-brand border-accent-brand'
+                  : 'text-text-secondary border-transparent hover:text-text-primary'
+              }`}
+            >
+              <VideoIcon className="w-4 h-4" />
+              <span>Video</span>
+            </button>
+          )}
+
+          {isAudio && (
+            <button
+              onClick={() => setActiveTab('audio')}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
+                activeTab === 'audio'
+                  ? 'text-accent-brand border-accent-brand'
+                  : 'text-text-secondary border-transparent hover:text-text-primary'
+              }`}
+            >
+              <AudioIcon className="w-4 h-4" />
+              <span>Audio</span>
+            </button>
+          )}
+
           {supportsComments && (
             <button
               onClick={() => setActiveTab('comments')}
-              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
                 activeTab === 'comments'
                   ? 'text-accent-brand border-accent-brand'
                   : 'text-text-secondary border-transparent hover:text-text-primary'
@@ -375,38 +464,40 @@ export function StoryPreviewModal() {
               <span>Comments</span>
             </button>
           )}
+
+          {(activeTab === 'read' || isArticle) && (
+            <button
+              onClick={() => setShowReaderSettings(true)}
+              className="px-4 py-3 text-sm font-medium text-text-secondary hover:text-text-primary transition-colors flex items-center gap-2 whitespace-nowrap ml-auto"
+            >
+              <SettingsIcon className="w-4 h-4" />
+              <span className="hidden sm:inline">Settings</span>
+            </button>
+          )}
         </div>
 
         {/* Tab Content */}
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'overview' && (
             <div className="p-6 max-w-3xl">
-              {/* Description */}
               {previewItem.description && (
                 <div className="mb-6">
                   <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-3">
                     About this story
                   </h3>
-                  <p className="text-text-primary leading-relaxed text-lg">
-                    {previewItem.description}
-                  </p>
+                  <p className="text-text-primary leading-relaxed text-lg">{previewItem.description}</p>
                 </div>
               )}
 
-              {/* Quick Stats */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-bg-secondary rounded-xl p-4">
                   <div className="text-2xl font-bold text-text-primary">
                     {formatEngagement(previewItem.engagementCount || 0)}
                   </div>
-                  <div className="text-sm text-text-secondary">
-                    {previewItem.engagementLabel || 'engagement'}
-                  </div>
+                  <div className="text-sm text-text-secondary">{previewItem.engagementLabel || 'engagement'}</div>
                 </div>
                 <div className="bg-bg-secondary rounded-xl p-4">
-                  <div className="text-2xl font-bold text-text-primary">
-                    #{previewItem.rank || '—'}
-                  </div>
+                  <div className="text-2xl font-bold text-text-primary">#{previewItem.rank || '—'}</div>
                   <div className="text-sm text-text-secondary">Trending rank</div>
                 </div>
                 <div className="bg-bg-secondary rounded-xl p-4">
@@ -423,21 +514,69 @@ export function StoryPreviewModal() {
                 </div>
               </div>
 
-              {/* CTA */}
               <div className="bg-bg-secondary rounded-xl p-6 text-center">
                 <p className="text-text-secondary mb-4">
-                  Read the full story on {config?.name}
+                  {isVideo
+                    ? 'Watch the video below or on ' + config?.name
+                    : isAudio
+                    ? 'Listen to the audio below'
+                    : 'Read the full story on ' + config?.name}
                 </p>
-                <a
-                  href={previewItem.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-accent-brand text-white font-medium rounded-lg hover:bg-accent-brand/90 transition-colors"
-                >
-                  <span>Open Original Article</span>
-                  <ExternalLinkIcon size={16} />
-                </a>
+                <div className="flex items-center justify-center gap-3">
+                  {isArticle && (
+                    <button
+                      onClick={() => setActiveTab('read')}
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-accent-brand text-white font-medium rounded-lg hover:bg-accent-brand/90 transition-colors"
+                    >
+                      <ReadIcon className="w-5 h-5" />
+                      <span>Read Article</span>
+                    </button>
+                  )}
+                  {isVideo && (
+                    <button
+                      onClick={() => setActiveTab('video')}
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      <VideoIcon className="w-5 h-5" />
+                      <span>Watch Video</span>
+                    </button>
+                  )}
+                  <a
+                    href={previewItem.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-bg-tertiary text-text-primary font-medium rounded-lg hover:bg-bg-tertiary/80 transition-colors"
+                  >
+                    <span>Open Original</span>
+                    <ExternalLinkIcon size={16} />
+                  </a>
+                </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'read' && previewItem.url && (
+            <ReaderView url={previewItem.url} title={previewItem.title} onClose={() => setActiveTab('overview')} />
+          )}
+
+          {activeTab === 'video' && isVideo && mediaInfo.videoId && (
+            <div className="p-6">
+              <YouTubePlayer
+                videoId={mediaInfo.videoId}
+                title={previewItem.title}
+                onClose={() => setActiveTab('overview')}
+              />
+            </div>
+          )}
+
+          {activeTab === 'audio' && isAudio && (
+            <div className="p-6 max-w-3xl mx-auto">
+              <AudioPlayer
+                src={mediaInfo.audioUrl || previewItem.url || ''}
+                title={previewItem.title}
+                artwork={previewItem.imageUrl}
+                onClose={() => setActiveTab('overview')}
+              />
             </div>
           )}
 
@@ -447,15 +586,15 @@ export function StoryPreviewModal() {
                 <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-4">
                   Discussion on {config?.name}
                 </h3>
-                <CommentsSection
-                  storyId={getStoryId()}
-                  platform={previewItem.platform}
-                />
+                <CommentsSection storyId={getStoryId()} platform={previewItem.platform} />
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Reader Settings Panel */}
+      <ReaderSettingsPanel isOpen={showReaderSettings} onClose={() => setShowReaderSettings(false)} />
     </div>
   );
 }

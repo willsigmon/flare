@@ -74,7 +74,7 @@ export function Top10Card({ item, rank }: Top10CardProps) {
 
   return (
     <article
-      className="group relative rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
+      className="group relative rounded-2xl overflow-hidden cursor-pointer card-hover spotlight-hover img-hover border-glow"
       onClick={handleClick}
     >
       {/* Background */}
@@ -107,7 +107,7 @@ export function Top10Card({ item, rank }: Top10CardProps) {
         <div className="flex items-start justify-between">
           {/* Rank badge */}
           <div
-            className={`w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center font-black text-lg md:text-xl text-white shadow-lg`}
+            className={`w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center font-black text-lg md:text-xl text-white shadow-lg rank-shine badge-hover`}
           >
             {rank}
           </div>
@@ -124,7 +124,7 @@ export function Top10Card({ item, rank }: Top10CardProps) {
 
         {/* Title */}
         <div className="mt-3">
-          <h3 className="text-base md:text-lg font-bold text-white line-clamp-2 drop-shadow-md group-hover:text-white/90 transition-colors">
+          <h3 className="text-base md:text-lg font-bold text-white line-clamp-2 drop-shadow-md group-hover:text-white transition-colors title-hover">
             {item.title}
           </h3>
         </div>
@@ -153,7 +153,7 @@ export function Top10Card({ item, rank }: Top10CardProps) {
           </div>
 
           {/* Vote buttons */}
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="vote-reveal pointer-events-auto" onClick={(e) => e.stopPropagation()}>
             <VoteButtons
               itemId={item.id}
               variant="minimal"

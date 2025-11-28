@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { TrendingItem, Platform, platformConfig } from '@/lib/types';
 import { SpotlightCard, Top10Card, CompactRow } from '@/components/cards';
 import { PlatformIcon, FireIcon, platformColors, TrophyIcon } from '@/components/icons/PlatformIcons';
@@ -11,30 +11,67 @@ interface FilterableFeedProps {
   items: TrendingItem[];
 }
 
+// Time filter options
+type TimeFilter = '24h' | 'week' | 'month' | 'all';
+const timeFilters: { id: TimeFilter; label: string; hours: number | null }[] = [
+  { id: '24h', label: '24h', hours: 24 },
+  { id: 'week', label: 'Week', hours: 168 },
+  { id: 'month', label: 'Month', hours: 720 },
+  { id: 'all', label: 'All Time', hours: null },
+];
+
 // Platform filter configuration - MVP: Real APIs only
 const platformFilters: { id: Platform | 'all'; label: string; color: string }[] = [
   { id: 'all', label: 'All', color: '#f97316' },
   { id: 'reddit', label: 'Reddit', color: '#ff4500' },
   { id: 'hackernews', label: 'Hacker News', color: '#ff6600' },
   { id: 'google', label: 'Google', color: '#4285f4' },
-  // Future platforms (when APIs are integrated):
-  // { id: 'youtube', label: 'YouTube', color: '#ff0000' },
-  // { id: 'bluesky', label: 'Bluesky', color: '#0085ff' },
-  // { id: 'twitter', label: 'X', color: '#1d9bf0' },
 ];
+
+// Fisher-Yates shuffle for discovery mode
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
 
 export function FilterableFeed({ items }: FilterableFeedProps) {
   const [selectedPlatform, setSelectedPlatform] = useState<Platform | 'all'>('all');
+  const [selectedTime, setSelectedTime] = useState<TimeFilter>('24h');
+  const [discoveryMode, setDiscoveryMode] = useState(false);
   const { user } = useAuth();
   const { isPersonalized, stats } = usePreferences();
 
-  // Apply personalized sorting to items
+  // Apply personalized sorting to items (disabled in discovery mode)
   const personalizedItems = usePersonalizedSort(items);
+
+  // Filter items based on time
+  const timeFilteredItems = useMemo(() => {
+    const timeConfig = timeFilters.find(t => t.id === selectedTime);
+    if (!timeConfig?.hours) return personalizedItems;
+
+    const cutoffTime = Date.now() - (timeConfig.hours * 60 * 60 * 1000);
+    return personalizedItems.filter(item => {
+      const itemTime = item.timestamp ? new Date(item.timestamp).getTime() : Date.now();
+      return itemTime >= cutoffTime;
+    });
+  }, [personalizedItems, selectedTime]);
+
+  // Apply discovery mode (randomize order) or keep personalized
+  const processedItems = useMemo(() => {
+    if (discoveryMode) {
+      return shuffleArray(timeFilteredItems);
+    }
+    return timeFilteredItems;
+  }, [timeFilteredItems, discoveryMode]);
 
   // Filter items based on selected platform
   const filteredItems = selectedPlatform === 'all'
-    ? personalizedItems
-    : personalizedItems.filter(item => item.platform === selectedPlatform);
+    ? processedItems
+    : processedItems.filter(item => item.platform === selectedPlatform);
 
   // Show special Top 10 layout only when showing all platforms
   const showTop10Layout = selectedPlatform === 'all' && filteredItems.length >= 10;
@@ -46,30 +83,67 @@ export function FilterableFeed({ items }: FilterableFeedProps) {
 
   return (
     <div className="space-y-6">
-      {/* Personalization Indicator */}
-      {user && (
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {isPersonalized ? (
-              <>
-                <span className="text-accent-positive text-sm">✨</span>
-                <span className="text-sm text-text-secondary">
-                  Personalized for you
-                </span>
-                <span className="text-xs text-text-muted">
-                  ({stats?.totalVotes} votes)
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="text-sm text-text-muted">
-                  Vote on {5 - (stats?.totalVotes || 0)} more stories to personalize your feed
-                </span>
-              </>
-            )}
-          </div>
+      {/* Top Filter Bar - Time + Discovery + Personalization */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        {/* Left: Time Filters */}
+        <div className="flex items-center gap-1 bg-bg-secondary rounded-lg p-1">
+          {timeFilters.map((filter) => (
+            <button
+              key={filter.id}
+              onClick={() => setSelectedTime(filter.id)}
+              className={`
+                px-3 py-1.5 text-xs font-medium rounded-md transition-all
+                ${selectedTime === filter.id
+                  ? 'bg-accent-primary text-white shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
+                }
+              `}
+            >
+              {filter.label}
+            </button>
+          ))}
         </div>
-      )}
+
+        {/* Right: Discovery Mode + Personalization */}
+        <div className="flex items-center gap-4">
+          {/* Discovery Mode Toggle */}
+          <button
+            onClick={() => setDiscoveryMode(!discoveryMode)}
+            className={`
+              flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all
+              ${discoveryMode
+                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                : 'bg-bg-secondary text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
+              }
+            `}
+            title={discoveryMode ? 'Showing random content' : 'Enable discovery mode for random content'}
+          >
+            <span className={discoveryMode ? 'animate-spin' : ''} style={{ animationDuration: '3s' }}>🎲</span>
+            <span>Discovery</span>
+          </button>
+
+          {/* Personalization Indicator */}
+          {user && !discoveryMode && (
+            <div className="flex items-center gap-2">
+              {isPersonalized ? (
+                <>
+                  <span className="text-accent-positive text-sm">✨</span>
+                  <span className="text-xs text-text-secondary">
+                    Personalized
+                  </span>
+                  <span className="text-xs text-text-muted">
+                    ({stats?.totalVotes})
+                  </span>
+                </>
+              ) : (
+                <span className="text-xs text-text-muted">
+                  Vote {5 - (stats?.totalVotes || 0)} more to personalize
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Platform Filter Chips */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
