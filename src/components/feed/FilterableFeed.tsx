@@ -4,32 +4,37 @@ import { useState } from 'react';
 import { TrendingItem, Platform, platformConfig } from '@/lib/types';
 import { SpotlightCard, Top10Card, CompactRow } from '@/components/cards';
 import { PlatformIcon, FireIcon, platformColors, TrophyIcon } from '@/components/icons/PlatformIcons';
+import { usePreferences, usePersonalizedSort } from '@/components/preferences/PreferencesProvider';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 interface FilterableFeedProps {
   items: TrendingItem[];
 }
 
-// Platform filter configuration
+// Platform filter configuration - MVP: Real APIs only
 const platformFilters: { id: Platform | 'all'; label: string; color: string }[] = [
   { id: 'all', label: 'All', color: '#f97316' },
   { id: 'reddit', label: 'Reddit', color: '#ff4500' },
   { id: 'hackernews', label: 'Hacker News', color: '#ff6600' },
-  { id: 'twitter', label: 'X', color: '#1d9bf0' },
   { id: 'google', label: 'Google', color: '#4285f4' },
-  { id: 'youtube', label: 'YouTube', color: '#ff0000' },
-  { id: 'substack', label: 'Substack', color: '#ff6719' },
-  { id: 'medium', label: 'Medium', color: '#000000' },
-  { id: 'threads', label: 'Threads', color: '#a855f7' },
-  { id: 'bluesky', label: 'Bluesky', color: '#0085ff' },
+  // Future platforms (when APIs are integrated):
+  // { id: 'youtube', label: 'YouTube', color: '#ff0000' },
+  // { id: 'bluesky', label: 'Bluesky', color: '#0085ff' },
+  // { id: 'twitter', label: 'X', color: '#1d9bf0' },
 ];
 
 export function FilterableFeed({ items }: FilterableFeedProps) {
   const [selectedPlatform, setSelectedPlatform] = useState<Platform | 'all'>('all');
+  const { user } = useAuth();
+  const { isPersonalized, stats } = usePreferences();
+
+  // Apply personalized sorting to items
+  const personalizedItems = usePersonalizedSort(items);
 
   // Filter items based on selected platform
   const filteredItems = selectedPlatform === 'all'
-    ? items
-    : items.filter(item => item.platform === selectedPlatform);
+    ? personalizedItems
+    : personalizedItems.filter(item => item.platform === selectedPlatform);
 
   // Show special Top 10 layout only when showing all platforms
   const showTop10Layout = selectedPlatform === 'all' && filteredItems.length >= 10;
@@ -41,6 +46,31 @@ export function FilterableFeed({ items }: FilterableFeedProps) {
 
   return (
     <div className="space-y-6">
+      {/* Personalization Indicator */}
+      {user && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {isPersonalized ? (
+              <>
+                <span className="text-accent-positive text-sm">✨</span>
+                <span className="text-sm text-text-secondary">
+                  Personalized for you
+                </span>
+                <span className="text-xs text-text-muted">
+                  ({stats?.totalVotes} votes)
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-sm text-text-muted">
+                  Vote on {5 - (stats?.totalVotes || 0)} more stories to personalize your feed
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Platform Filter Chips */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
         {platformFilters.map((filter) => {
@@ -95,7 +125,7 @@ export function FilterableFeed({ items }: FilterableFeedProps) {
             <div className="flex items-center gap-2 mb-4">
               <TrophyIcon size={20} className="text-amber-500" />
               <h2 className="text-lg font-bold text-text-primary">Top 10 Trending</h2>
-              <span className="text-xs text-text-tertiary ml-2">Weighted by platform authority</span>
+              <span className="text-xs text-text-tertiary ml-2">From Reddit, Hacker News & Google</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {top10Items.map((item, index) => (
@@ -134,20 +164,7 @@ export function FilterableFeed({ items }: FilterableFeedProps) {
         </section>
       )}
 
-      {/* When filtering by platform, show simpler layout */}
-      {!showTop10Layout && selectedPlatform !== 'all' && filteredItems.length > 0 && (
-        <section className="bg-bg-secondary rounded-xl overflow-hidden">
-          <div className="divide-y divide-border/30">
-            {filteredItems.slice(0, 50).map((item, index) => (
-              <CompactRow
-                key={item.id}
-                item={item}
-                rank={index + 1}
-              />
-            ))}
-          </div>
-        </section>
-      )}
+      {/* NOTE: Removed duplicate rendering block - restItems already handles filtered views */}
 
       {/* Empty state */}
       {filteredItems.length === 0 && (

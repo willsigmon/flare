@@ -17,38 +17,16 @@ export async function GET() {
       .eq('user_id', user.id)
       .single();
 
-    // Get vote counts
+    // Get vote counts from web_article_votes table
     const { data: voteStats } = await supabase
-      .from('user_articles')
+      .from('web_article_votes')
       .select('vote')
       .eq('user_id', user.id)
       .not('vote', 'eq', 0);
 
     const upvotes = voteStats?.filter(v => v.vote === 1).length || 0;
     const downvotes = voteStats?.filter(v => v.vote === -1).length || 0;
-
-    // Get saved count
-    const { count: savedCount } = await supabase
-      .from('user_articles')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('is_saved', true);
-
-    // Get read count
-    const { count: readCount } = await supabase
-      .from('user_articles')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('is_read', true);
-
-    // Get total time spent
-    const { data: timeData } = await supabase
-      .from('user_articles')
-      .select('time_spent_sec')
-      .eq('user_id', user.id)
-      .not('time_spent_sec', 'is', null);
-
-    const totalTimeSpent = timeData?.reduce((sum, r) => sum + (r.time_spent_sec || 0), 0) || 0;
+    const totalVotes = upvotes + downvotes;
 
     return NextResponse.json({
       preferences: {
@@ -57,15 +35,13 @@ export async function GET() {
         recencyWeight: prefs?.recency_weight || 0.5,
         viralityWeight: prefs?.virality_weight || 0.5,
         explorationEnabled: prefs?.exploration_enabled ?? true,
-        explorationPercentage: prefs?.exploration_percentage || 10,
+        explorationPercentage: prefs?.exploration_percentage || 20,
       },
       stats: {
         totalInteractions: prefs?.total_interactions || 0,
+        totalVotes,
         upvotes,
         downvotes,
-        savedCount: savedCount || 0,
-        readCount: readCount || 0,
-        totalTimeSpentMinutes: Math.round(totalTimeSpent / 60),
       },
     });
   } catch (error) {

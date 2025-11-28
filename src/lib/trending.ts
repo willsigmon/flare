@@ -21,6 +21,25 @@ const vaguePatterns = [
   /went viral/i,
   /blew up/i,
   /here's what/i,
+  // NEW: More clickbait patterns
+  /if you (haven't|have not|havent)\s+(seen|watched|heard)/i, // Removed ^ anchor
+  /you (need|have|got) to (see|watch|hear|check)/i,
+  /you (absolutely\s+)?(need|have|got) to\.?$/i, // "You need to" at end of title
+  /(absolutely|definitely|totally)\s+(need|have|got|must)\s+to/i, // "absolutely need to"
+  /can('t|not) (believe|stop|unsee)/i,
+  /\[request\]$/i, // Reddit request tag at end
+  /\[oc\]$/i, // Original content tag
+  /^(psa|til|eli5|ama|iama):/i, // Common Reddit prefixes without content
+  /watch (this|until|till)/i,
+  /wait (for|till|until) (it|the end)/i,
+  /haven't seen this/i, // "If you haven't seen this"
+  /need to see this/i, // "You need to see this"
+  // NEW: More specific vague patterns from scrutiny
+  /^(it was|it is|it's) time\.?$/i, // "It was time" standalone
+  /^everyone in this/i, // "Everyone in this sub right now"
+  /right now\.?$/i, // Ends with "right now"
+  /^(same|mood|this|me|vibes|facts|true|real)\.?$/i, // Single word reactions
+  /^(yes|no|nope|yep|agreed|exactly)\.?$/i, // Affirmations
 ];
 
 // Words that indicate specificity (title is probably fine)
@@ -43,7 +62,40 @@ function isTitleVague(title: string): boolean {
   }
 
   // Check for vague patterns
-  return vaguePatterns.some(pattern => pattern.test(title));
+  if (vaguePatterns.some(pattern => pattern.test(title))) {
+    return true;
+  }
+
+  // NEW: Short titles without context are vague
+  // "It was time", "meirl", "Mood", "Same" etc.
+  if (title.length < 30) {
+    // Check if it has any meaningful nouns/proper nouns
+    const hasProperNoun = /[A-Z][a-z]+\s+[A-Z]/.test(title); // "John Smith"
+    const hasNumber = /\d/.test(title);
+    const hasQuote = /["']/.test(title);
+    const wordCount = title.split(/\s+/).length;
+
+    // Very short with no specifics = vague
+    if (wordCount <= 4 && !hasProperNoun && !hasNumber && !hasQuote) {
+      return true;
+    }
+  }
+
+  // Titles that are just Reddit-style comments
+  const redditVaguePhrases = [
+    /^(it was|it is|it's)\s+\w+$/i,
+    /^(same|mood|this|me|vibes|facts)$/i,
+    /^me_?irl$/i,
+    /^(omg|lol|lmao|bruh|oof|yikes)$/i,
+    /^\[oc\]$/i,
+    /^(finally|welp|update:?)$/i,
+  ];
+
+  if (redditVaguePhrases.some(pattern => pattern.test(title.trim()))) {
+    return true;
+  }
+
+  return false;
 }
 
 // Extract key context from description or subtitle
@@ -80,10 +132,6 @@ function enhanceTitle(item: TrendingItem): string {
     return title;
   }
 
-  // Try to extract context from available fields
-  const descContext = extractContext(description || '');
-  const subContext = extractContext(subtitle || '');
-
   // Clean the original title
   let cleanedTitle = title
     .replace(/^#\w+\s*[-–—]\s*/, '') // Remove hashtag prefix
@@ -91,55 +139,81 @@ function enhanceTitle(item: TrendingItem): string {
     .replace(/\.\.\.$/, '')
     .trim();
 
-  // Strategy 1: Use description context if available and meaningful
-  if (descContext && descContext.length > 20) {
-    // If description is more specific, use it
-    if (!isTitleVague(descContext)) {
-      return descContext.length > 80 ? descContext.slice(0, 80) + '...' : descContext;
+  // Strategy 1: For Reddit, use subreddit as context (most reliable)
+  if (platform === 'reddit' && subtitle) {
+    const subredditMatch = subtitle.match(/r\/(\w+)/);
+    if (subredditMatch) {
+      const subreddit = subredditMatch[1];
+      // Map common subreddits to readable names
+      const subredditNames: Record<string, string> = {
+        'meirl': 'Relatable Moment',
+        'me_irl': 'Relatable Moment',
+        'mildlyinteresting': 'Mildly Interesting',
+        'interestingasfuck': 'Interesting',
+        'todayilearned': 'TIL',
+        'tifu': 'TIFU Story',
+        'aita': 'AITA',
+        'AmItheAsshole': 'AITA',
+        'pics': 'Photo',
+        'funny': 'Funny',
+        'aww': 'Cute',
+        'gaming': 'Gaming',
+        'movies': 'Movies',
+        'music': 'Music',
+        'news': 'News',
+        'worldnews': 'World News',
+        'science': 'Science',
+        'technology': 'Tech',
+        'askreddit': 'AskReddit',
+        'explainlikeimfive': 'ELI5',
+        'showerthoughts': 'Shower Thought',
+        'lifeprotips': 'Life Pro Tip',
+        'unpopularopinion': 'Unpopular Opinion',
+        'changemyview': 'CMV',
+      };
+
+      const prefix = subredditNames[subreddit.toLowerCase()] || `r/${subreddit}`;
+
+      // If description has useful context, use it
+      if (description && description.length > 30 && !isTitleVague(description.slice(0, 80))) {
+        const shortDesc = description.slice(0, 60).trim();
+        return `${prefix}: ${shortDesc}${description.length > 60 ? '...' : ''}`;
+      }
+
+      return `${prefix}: ${cleanedTitle}`;
     }
   }
 
-  // Strategy 2: Prepend category/topic if it adds clarity
-  if (category && category !== 'Trending' && !cleanedTitle.toLowerCase().includes(category.toLowerCase())) {
-    // Check if subtitle has useful context (like subreddit or publication name)
-    if (subContext) {
-      // Extract publication/subreddit name
-      const pubMatch = subtitle?.match(/^([^•·\-]+)/);
-      if (pubMatch && pubMatch[1].trim().length > 2) {
-        const pub = pubMatch[1].trim();
-        // Don't add generic prefixes
-        if (!['News', 'Trending', '@trending', '@explore'].includes(pub)) {
-          return `${pub}: ${cleanedTitle}`;
-        }
-      }
-    }
+  // Strategy 2: Use description if it's more informative
+  const descContext = extractContext(description || '');
+  if (descContext && descContext.length > 20 && !isTitleVague(descContext)) {
+    return descContext.length > 80 ? descContext.slice(0, 80) + '...' : descContext;
+  }
 
-    // Use category as prefix
+  // Strategy 3: Use category as prefix
+  if (category && category !== 'Trending' && !cleanedTitle.toLowerCase().includes(category.toLowerCase())) {
     return `${category}: ${cleanedTitle}`;
   }
 
-  // Strategy 3: Add platform context for very vague titles
-  if (cleanedTitle.length < 40) {
-    const platformNames: Record<Platform, string> = {
-      reddit: 'Reddit',
-      hackernews: 'HN',
-      twitter: 'X',
-      youtube: 'YouTube',
-      google: 'Trending',
-      bluesky: 'Bluesky',
-      threads: 'Threads',
+  // Strategy 4: Just return with platform context for very short titles
+  if (cleanedTitle.length < 20) {
+    const platformLabels: Record<Platform, string> = {
+      reddit: 'Reddit Post',
+      hackernews: 'HN Discussion',
+      twitter: 'Tweet',
+      youtube: 'Video',
+      google: 'Trending Search',
+      bluesky: 'Bluesky Post',
+      threads: 'Thread',
       instagram: 'Instagram',
       facebook: 'Facebook',
       linkedin: 'LinkedIn',
       tiktok: 'TikTok',
-      substack: 'Substack',
-      medium: 'Medium',
+      substack: 'Article',
+      medium: 'Article',
       local: 'Local',
     };
-
-    if (category && category !== 'Trending') {
-      return `${category} ${platformNames[platform] || ''}: ${cleanedTitle}`;
-    }
+    return `${platformLabels[platform] || 'Post'}: ${cleanedTitle}`;
   }
 
   return cleanedTitle || title;
@@ -158,18 +232,79 @@ function enhanceTitles(items: TrendingItem[]): TrendingItem[] {
 // Image fallback generator - Creates visually rich images from titles
 // Uses placeholder services when no image is available
 // =============================================================================
-function generateFallbackImage(title: string, platform: Platform): string {
-  // Create a consistent seed from the title for reproducible images
-  const seed = encodeURIComponent(title.slice(0, 50).replace(/[^a-zA-Z0-9]/g, ''));
-
-  // Use picsum.photos with seed for high-quality placeholder images
-  // The seed ensures same title = same image
-  return `https://picsum.photos/seed/${seed}/800/450`;
+function generateFallbackImage(title: string, platform: Platform): string | undefined {
+  // Return undefined to let cards use their built-in gradient backgrounds
+  // Random picsum images were showing irrelevant content (e.g., tank for Pocketbase)
+  return undefined;
 }
 
-// Ensure every item has an image
-function ensureImage(item: TrendingItem): TrendingItem {
-  if (!item.imageUrl) {
+// Subreddits known for text screenshot content (not good for visual display)
+const textScreenshotSubreddits = new Set([
+  'meirl', 'me_irl', 'meow_irl', '2meirl4meirl',
+  'whitepeopletwitter', 'blackpeopletwitter', 'scottishpeopletwitter',
+  'greentext', 'tumblr', 'tumblrinaction',
+  'murderedbywords', 'clevercomebacks', 'rareinsults',
+  'brandnewsentence', 'suspiciouslyspecific',
+  'showerthoughts', 'unpopularopinion',
+  'amitheasshole', 'tifu', 'relationships',
+  'askreddit', 'nostupidquestions',
+  'jokes', 'dadjokes',
+  'texts', 'badfaketexts', 'goodfaketexts',
+  'tinder', 'bumble',
+  'facepalm', 'cringetopia',
+  'antiwork', 'workreform',
+  'choosingbeggars', 'entitledparents',
+  // Political text-heavy subreddits
+  'politicalhumor', 'politics', 'conservative', 'liberal',
+  'therightcantmeme', 'theleftcantmeme',
+  'selfawarewolves', 'leopardsatemyface',
+  // More text-based subreddits
+  'insanepeoplefacebook', 'oldpeoplefacebook',
+  'thathappened', 'nothingeverhappens',
+  'confidentlyincorrect', 'confidentlywrong',
+  'iamverysmart', 'iamverybadass',
+  'niceguys', 'nicegirls',
+  'creepypms', 'sadcringe',
+  'subredditdrama', 'outoftheloop',
+  'bestof', 'worstof',
+  'quityourbullshit', 'dontyouknowwhoiam',
+]);
+
+// Check if a Reddit image is likely a text screenshot and should use fallback
+function isTextScreenshotImage(imageUrl: string | undefined, subreddit: string, selftext: string = ''): boolean {
+  if (!imageUrl) return false;
+
+  const subredditLower = subreddit.toLowerCase();
+
+  // Check if from a known text-heavy subreddit
+  if (textScreenshotSubreddits.has(subredditLower)) {
+    return true;
+  }
+
+  // Check for external screenshot services in the URL
+  const screenshotPatterns = [
+    /i\.redd\.it.*\.(png|jpg).*text/i,
+    /preview\.redd\.it.*external-preview/i,
+  ];
+
+  if (screenshotPatterns.some(p => p.test(imageUrl))) {
+    return true;
+  }
+
+  // If the post has significant selftext, the preview is likely auto-generated
+  if (selftext && selftext.length > 200) {
+    return true;
+  }
+
+  return false;
+}
+
+// Ensure every item has an image, filtering out text screenshots
+function ensureImage(item: TrendingItem, selftext: string = ''): TrendingItem {
+  const subreddit = item.category || '';
+
+  // Check if we should use fallback instead of the provided image
+  if (!item.imageUrl || isTextScreenshotImage(item.imageUrl, subreddit, selftext)) {
     return {
       ...item,
       imageUrl: generateFallbackImage(item.title, item.platform),
@@ -263,7 +398,7 @@ async function fetchRedditTrends(): Promise<TrendingItem[]> {
         timestamp: new Date(post.created_utc * 1000),
         category: post.subreddit,
         imageUrl,
-      });
+      }, post.selftext || '');
     });
   } catch (error) {
     console.error('Reddit fetch error:', error);
@@ -417,16 +552,18 @@ function formatViews(views: number): string {
 }
 
 // =============================================================================
-// Google Trends - Real trends via RSS
+// Google Trends - Real trends via RSS (NEW URL as of 2025)
 // =============================================================================
 async function fetchGoogleTrends(): Promise<TrendingItem[]> {
   try {
+    // Updated URL - the old /trends/trendingsearches/daily/ path is deprecated
     const response = await fetch(
-      'https://trends.google.com/trends/trendingsearches/daily/rss?geo=US',
+      'https://trends.google.com/trending/rss?geo=US',
       { next: { revalidate: 600 } }
     );
 
     if (!response.ok) {
+      console.error('Google Trends RSS returned:', response.status);
       return getGoogleMockTrends();
     }
 
@@ -437,23 +574,25 @@ async function fetchGoogleTrends(): Promise<TrendingItem[]> {
     let match;
     let rank = 1;
 
-    while ((match = itemRegex.exec(text)) !== null && rank <= 15) {
+    while ((match = itemRegex.exec(text)) !== null && items.length < 10) {
       const itemXml = match[1];
 
       const title = extractXmlTag(itemXml, 'title');
       const traffic = extractXmlTag(itemXml, 'ht:approx_traffic') || '10K+';
       const newsUrl = extractXmlTag(itemXml, 'ht:news_item_url');
       const imageUrl = extractXmlTag(itemXml, 'ht:picture');
+      const searchCount = parseTraffic(traffic);
 
-      if (title) {
+      // Filter out low-engagement trends (< 1000 searches)
+      if (title && searchCount >= 1000) {
         items.push(ensureImage({
           id: `google-${rank}`,
           platform: 'google',
-          title,
+          title: `Trending Search: ${title}`,
           subtitle: `${traffic} searches`,
           url: newsUrl || `https://trends.google.com/trends/explore?q=${encodeURIComponent(title)}`,
           rank,
-          engagementCount: parseTraffic(traffic),
+          engagementCount: searchCount,
           engagementLabel: 'searches',
           timestamp: new Date(),
           category: 'Trending',
@@ -463,7 +602,9 @@ async function fetchGoogleTrends(): Promise<TrendingItem[]> {
       }
     }
 
-    return items.length > 0 ? items : getGoogleMockTrends();
+    // Limit Google Trends to max 5 items to prevent feed domination
+    const limitedItems = items.slice(0, 5);
+    return limitedItems.length > 0 ? limitedItems : getGoogleMockTrends();
   } catch (error) {
     console.error('Google Trends fetch error:', error);
     return getGoogleMockTrends();
@@ -991,7 +1132,7 @@ async function fetchLocalTrends(subreddits: string[]): Promise<TrendingItem[]> {
           timestamp: new Date(post.created_utc * 1000),
           category: post.subreddit,
           imageUrl,
-        });
+        }, post.selftext || '');
       });
 
       allItems.push(...items);
@@ -1076,31 +1217,20 @@ async function fetchPulsePosts(): Promise<PulsePost[]> {
 }
 
 // =============================================================================
-// Main fetch function - All platforms in parallel with deduplication
+// Main fetch function - Real APIs only (no mock data for MVP)
 // =============================================================================
 export async function fetchAllTrends(): Promise<TrendingSection[]> {
-  const [reddit, hackernews, youtube, google, bluesky] = await Promise.all([
+  const [reddit, hackernews, google] = await Promise.all([
     fetchRedditTrends(),
     fetchHackerNewsTrends(),
-    fetchYouTubeTrends(),
     fetchGoogleTrends(),
-    fetchBlueskyTrends(),
   ]);
 
+  // MVP: Only include platforms with real API data
   const sections: TrendingSection[] = [
     { id: 'reddit', platform: 'reddit', title: 'Trending on Reddit', items: reddit },
     { id: 'hackernews', platform: 'hackernews', title: 'Top on Hacker News', items: hackernews },
-    { id: 'youtube', platform: 'youtube', title: 'Trending on YouTube', items: youtube },
     { id: 'google', platform: 'google', title: 'Google Trends', items: google },
-    { id: 'bluesky', platform: 'bluesky', title: 'Hot on Bluesky', items: bluesky },
-    { id: 'twitter', platform: 'twitter', title: 'Trending on X', items: getTwitterTrends() },
-    { id: 'threads', platform: 'threads', title: 'Popular on Threads', items: getThreadsTrends() },
-    { id: 'instagram', platform: 'instagram', title: 'Trending on Instagram', items: getInstagramTrends() },
-    { id: 'facebook', platform: 'facebook', title: 'Trending on Facebook', items: getFacebookTrends() },
-    { id: 'linkedin', platform: 'linkedin', title: 'Trending on LinkedIn', items: getLinkedInTrends() },
-    { id: 'tiktok', platform: 'tiktok', title: 'Trending on TikTok', items: getTikTokTrends() },
-    { id: 'substack', platform: 'substack', title: 'Popular on Substack', items: getSubstackTrends() },
-    { id: 'medium', platform: 'medium', title: 'Trending on Medium', items: getMediumTrends() },
   ];
 
   return sections.filter(s => s.items.length > 0);
@@ -1126,6 +1256,24 @@ const platformWeights: Record<Platform, number> = {
   local: 1.0,         // Local content
 };
 
+// Normalize engagement scores across platforms (different platforms have vastly different scales)
+const engagementNormalization: Record<Platform, number> = {
+  reddit: 1,          // Base: Reddit has highest raw numbers
+  hackernews: 100,    // HN points are ~100x more valuable (500 points = quality)
+  google: 15,         // Google trends - balanced to not dominate (2K searches ≈ 30K normalized)
+  youtube: 0.01,      // YouTube views are in millions
+  twitter: 10,        // Likes/retweets
+  bluesky: 20,        // Smaller platform
+  threads: 15,
+  instagram: 0.1,     // High numbers
+  facebook: 0.1,
+  linkedin: 5,
+  tiktok: 0.001,      // TikTok has massive view counts
+  substack: 50,
+  medium: 20,
+  local: 1,
+};
+
 // Fetch all items as a unified, deduplicated feed sorted by weighted engagement
 export async function fetchUnifiedFeed(): Promise<TrendingItem[]> {
   const sections = await fetchAllTrends();
@@ -1136,22 +1284,101 @@ export async function fetchUnifiedFeed(): Promise<TrendingItem[]> {
   // Deduplicate similar stories
   const deduplicated = deduplicateItems(allItems);
 
-  // Sort by weighted engagement and recency
+  // Sort by normalized, weighted engagement and recency
   const now = Date.now();
-  const sortedItems = deduplicated.sort((a, b) => {
-    const aAge = (now - new Date(a.timestamp).getTime()) / 3600000; // hours
-    const bAge = (now - new Date(b.timestamp).getTime()) / 3600000;
+  const scoredItems = deduplicated.map(item => {
+    const age = (now - new Date(item.timestamp).getTime()) / 3600000; // hours
+    const weight = platformWeights[item.platform] || 1.0;
+    const normalization = engagementNormalization[item.platform] || 1;
 
-    // Get platform weights
-    const aWeight = platformWeights[a.platform] || 1.0;
-    const bWeight = platformWeights[b.platform] || 1.0;
+    // Normalize engagement then apply weight and time decay
+    const normalizedEngagement = (item.engagementCount || 0) * normalization;
+    let score = (normalizedEngagement * weight) / Math.pow(age + 2, 1.5);
 
-    // Score = (engagement * platformWeight) / (age + 2)^1.5 - decay older content
-    const aScore = ((a.engagementCount || 0) * aWeight) / Math.pow(aAge + 2, 1.5);
-    const bScore = ((b.engagementCount || 0) * bWeight) / Math.pow(bAge + 2, 1.5);
+    // Penalty for vague/clickbait titles that can't be properly enhanced
+    if (isTitleVague(item.title)) {
+      // Check if we can enhance it with description
+      const hasGoodDescription = item.description &&
+        item.description.length > 30 &&
+        !isTitleVague(item.description.slice(0, 80));
 
-    return bScore - aScore;
+      // Heavy penalty if no good description to fix the vague title
+      if (!hasGoodDescription) {
+        score *= 0.1; // 90% penalty for unfixable clickbait
+      } else {
+        score *= 0.5; // 50% penalty even with fixable clickbait
+      }
+    }
+
+    return { item, score };
   });
+
+  // Sort by score
+  scoredItems.sort((a, b) => b.score - a.score);
+
+  // Ensure platform diversity in top 10 with interleaving at top positions
+  const diverseTop: TrendingItem[] = [];
+  const platformCounts: Record<string, number> = {};
+  const usedIds = new Set<string>();
+
+  // Group items by platform (already sorted by score within each group)
+  const byPlatform: Record<string, typeof scoredItems> = {};
+  for (const scored of scoredItems) {
+    const platform = scored.item.platform;
+    if (!byPlatform[platform]) byPlatform[platform] = [];
+    byPlatform[platform].push(scored);
+  }
+
+  // Get active platforms (those with items)
+  const activePlatforms = Object.keys(byPlatform);
+
+  // Phase 1: Interleave top items from each platform for first N positions
+  // This ensures no single platform dominates the top of the feed
+  const platformPointers: Record<string, number> = {};
+  activePlatforms.forEach(p => platformPointers[p] = 0);
+
+  // Round-robin: take 1 from each platform to ensure early diversity
+  for (let round = 0; round < 2 && diverseTop.length < 10; round++) {
+    for (const platform of activePlatforms) {
+      if (diverseTop.length >= 10) break;
+      const platformItems = byPlatform[platform];
+      const pointer = platformPointers[platform];
+
+      if (pointer < platformItems.length) {
+        const item = platformItems[pointer].item;
+        if (!usedIds.has(item.id)) {
+          diverseTop.push(item);
+          usedIds.add(item.id);
+          platformCounts[platform] = (platformCounts[platform] || 0) + 1;
+          platformPointers[platform]++;
+        }
+      }
+    }
+  }
+
+  // Phase 2: Fill remaining top 10 slots by score, respecting 3-per-platform cap
+  for (const { item } of scoredItems) {
+    if (diverseTop.length >= 10) break;
+    if (usedIds.has(item.id)) continue;
+
+    const platform = item.platform;
+    const count = platformCounts[platform] || 0;
+
+    if (count < 3) {
+      diverseTop.push(item);
+      usedIds.add(item.id);
+      platformCounts[platform] = count + 1;
+    }
+  }
+
+  // Collect remaining items for positions 11+
+  const remaining = scoredItems.filter(s => !usedIds.has(s.item.id));
+
+  // Add remaining items after top 10
+  const sortedItems = [
+    ...diverseTop,
+    ...remaining.map(r => r.item),
+  ];
 
   // Re-assign ranks
   const rankedItems = sortedItems.map((item, index) => ({

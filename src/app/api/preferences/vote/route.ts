@@ -1,6 +1,39 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
+// GET: Fetch all votes for the current user
+export async function GET() {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ votes: {} });
+    }
+
+    const { data: votes, error } = await supabase
+      .from('web_article_votes')
+      .select('article_id, vote')
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error('Error fetching votes:', error);
+      return NextResponse.json({ votes: {} });
+    }
+
+    // Convert to map: { articleId: vote }
+    const voteMap: Record<string, number> = {};
+    votes?.forEach(v => {
+      voteMap[v.article_id] = v.vote;
+    });
+
+    return NextResponse.json({ votes: voteMap });
+  } catch (error) {
+    console.error('Get votes error:', error);
+    return NextResponse.json({ votes: {} });
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -18,31 +51,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Upsert article if it doesn't exist
-    const { data: article, error: articleError } = await supabase
-      .from('articles')
-      .upsert({
-        id: articleId,
-        platform,
-        category,
-        title,
-        url,
-        created_at: new Date().toISOString(),
-      }, { onConflict: 'id' })
-      .select()
-      .single();
-
-    if (articleError && articleError.code !== '23505') {
-      console.error('Article upsert error:', articleError);
-    }
-
-    // Upsert user_article vote
+    // Upsert vote in web_article_votes table
     const { error: voteError } = await supabase
-      .from('user_articles')
+      .from('web_article_votes')
       .upsert({
         user_id: user.id,
         article_id: articleId,
-        vote: vote, // 1 for up, -1 for down, 0 for neutral
+        platform,
+        category,
+        vote, // 1 for up, -1 for down, 0 for neutral
+        title,
+        url,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id,article_id' });
 
@@ -51,11 +70,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to save vote' }, { status: 500 });
     }
 
-    // Log activity event
-    await supabase.from('activity_events').insert({
+    // Log activity event (fire and forget)
+    supabase.from('activity_events').insert({
       user_id: user.id,
       event_type: vote === 1 ? 'upvote' : vote === -1 ? 'downvote' : 'unvote',
       article_id: articleId,
+      metadata: { platform, category },
+    }).then(({ error }) => {
+      if (error) console.error('Activity event error:', error);
     });
 
     // Update user preferences (async, don't wait)

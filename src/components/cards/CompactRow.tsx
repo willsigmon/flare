@@ -39,6 +39,7 @@ export function CompactRow({ item, rank }: CompactRowProps) {
   const config = platformConfig[item.platform];
   const color = platformColors[item.platform] || '#3b82f6';
   const commentCount = extractCommentCount(item.subtitle);
+  const hasImage = item.imageUrl && item.imageUrl.length > 0;
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -85,6 +86,17 @@ export function CompactRow({ item, rank }: CompactRowProps) {
           <span>{formatTimeAgo(item.timestamp)}</span>
         </div>
       </div>
+
+      {/* Thumbnail */}
+      {hasImage && (
+        <div className="flex-shrink-0 w-16 h-10 rounded-md overflow-hidden bg-bg-tertiary">
+          <img
+            src={item.imageUrl}
+            alt=""
+            className="w-full h-full object-cover"
+          />
+        </div>
+      )}
 
       {/* Comment count */}
       {commentCount && (

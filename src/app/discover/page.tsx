@@ -17,7 +17,6 @@ interface DiscoverCategory {
   id: Category;
   name: string;
   description: string;
-  count: number;
 }
 
 interface TrendingTopic {
@@ -38,14 +37,14 @@ interface FeaturedUser {
 }
 
 const categories: DiscoverCategory[] = [
-  { id: 'tech', name: 'Technology', description: 'Latest tech news and innovations', count: 1234 },
-  { id: 'space', name: 'Startups', description: 'Entrepreneurship and venture news', count: 892 },
-  { id: 'science', name: 'Science', description: 'Scientific discoveries and research', count: 567 },
-  { id: 'gaming', name: 'Gaming', description: 'Video games, esports, and more', count: 2341 },
-  { id: 'entertainment', name: 'Entertainment', description: 'Movies, shows, and creative work', count: 445 },
-  { id: 'ai', name: 'AI & ML', description: 'Artificial intelligence and machine learning', count: 1567 },
-  { id: 'finance', name: 'Finance', description: 'Markets, investing, and economics', count: 678 },
-  { id: 'crypto', name: 'Crypto & Web3', description: 'Blockchain, DeFi, and NFTs', count: 901 },
+  { id: 'tech', name: 'Technology', description: 'Latest tech news and innovations' },
+  { id: 'space', name: 'Startups', description: 'Entrepreneurship and venture news' },
+  { id: 'science', name: 'Science', description: 'Scientific discoveries and research' },
+  { id: 'gaming', name: 'Gaming', description: 'Video games, esports, and more' },
+  { id: 'entertainment', name: 'Entertainment', description: 'Movies, shows, and creative work' },
+  { id: 'ai', name: 'AI & ML', description: 'Artificial intelligence and machine learning' },
+  { id: 'finance', name: 'Finance', description: 'Markets, investing, and economics' },
+  { id: 'crypto', name: 'Crypto & Web3', description: 'Blockchain, DeFi, and NFTs' },
 ];
 
 export default function DiscoverPage() {
@@ -173,12 +172,9 @@ export default function DiscoverPage() {
                   <h3 className={`font-semibold mb-1 ${isSelected ? 'text-white' : 'text-text-primary'}`}>
                     {category.name}
                   </h3>
-                  <p className={`text-sm mb-2 ${isSelected ? 'text-white/80' : 'text-text-secondary'}`}>
+                  <p className={`text-sm ${isSelected ? 'text-white/80' : 'text-text-secondary'}`}>
                     {category.description}
                   </p>
-                  <span className={`text-xs ${isSelected ? 'text-white/60' : 'text-text-tertiary'}`}>
-                    {category.count.toLocaleString()} posts
-                  </span>
                 </button>
               );
             })}

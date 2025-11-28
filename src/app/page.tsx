@@ -1,16 +1,12 @@
 import { Suspense } from 'react';
-import { fetchAllTrends } from '@/lib/trending';
+import { fetchUnifiedFeed } from '@/lib/trending';
 import { MainLayout } from '@/components/layout';
 import { FilterableFeed } from '@/components/feed';
 
 // Server component to fetch data
 async function TrendingContent() {
-  const sections = await fetchAllTrends();
-
-  // Flatten and sort all items by engagement
-  const allItems = sections
-    .flatMap(s => s.items)
-    .sort((a, b) => (b.engagementCount || 0) - (a.engagementCount || 0));
+  // fetchUnifiedFeed handles: deduplication, weighted sorting, and title enhancement
+  const allItems = await fetchUnifiedFeed();
 
   return <FilterableFeed items={allItems} />;
 }

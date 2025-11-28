@@ -113,10 +113,12 @@ export function SpotlightCard({ item }: SpotlightCardProps) {
           />
         )}
 
-        {/* Category icon decoration */}
-        <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none opacity-10">
-          <CategoryIcon category={category} size={200} className="text-white" />
-        </div>
+        {/* Category icon decoration - only show on fallback gradient (no image) */}
+        {!hasImage && (
+          <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none opacity-20">
+            <CategoryIcon category={category} size={200} className="text-white" />
+          </div>
+        )}
 
         {/* Content */}
         <div className="relative p-6 md:p-8 min-h-[320px] md:min-h-[380px] flex flex-col justify-between">
@@ -143,7 +145,7 @@ export function SpotlightCard({ item }: SpotlightCardProps) {
                   <span>Top Story</span>
                 </div>
                 <div className="text-white/60 text-xs mt-0.5">
-                  Trending across all platforms
+                  Top trending right now
                 </div>
               </div>
             </div>

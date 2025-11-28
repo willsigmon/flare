@@ -4,21 +4,11 @@ import { useState, useEffect } from 'react';
 import { Platform, platformConfig } from '@/lib/types';
 import { PlatformIcon, platformColors } from '@/components/icons/PlatformIcons';
 
-// Platform stats display (read-only, no toggles)
+// Only REAL platforms with actual API integrations
 const platforms: { id: Platform; count: number }[] = [
   { id: 'reddit', count: 25 },
   { id: 'hackernews', count: 25 },
-  { id: 'youtube', count: 20 },
   { id: 'google', count: 15 },
-  { id: 'twitter', count: 15 },
-  { id: 'bluesky', count: 10 },
-  { id: 'substack', count: 12 },
-  { id: 'medium', count: 12 },
-  { id: 'instagram', count: 10 },
-  { id: 'tiktok', count: 10 },
-  { id: 'threads', count: 8 },
-  { id: 'facebook', count: 5 },
-  { id: 'linkedin', count: 5 },
 ];
 
 // Live pulse indicator
@@ -66,67 +56,90 @@ function StatBox({ value, label }: { value: number; label: string }) {
   );
 }
 
-// Source stats display (read-only)
+// Collapsible source stats display
 function SourcesOverview() {
+  const [isExpanded, setIsExpanded] = useState(false);
   const totalStories = platforms.reduce((sum, p) => sum + p.count, 0);
 
   return (
     <div className="glass rounded-2xl p-4 backdrop-blur-xl">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">
-          Active Sources
-        </h3>
-        <span className="text-[10px] font-bold text-accent-positive bg-accent-positive/15 px-2 py-0.5 rounded-full">
-          {platforms.length} Connected
-        </span>
-      </div>
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between"
+      >
+        <div className="flex items-center gap-2">
+          <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">
+            Active Sources
+          </h3>
+          <span className="text-[10px] font-bold text-accent-positive bg-accent-positive/15 px-2 py-0.5 rounded-full">
+            {platforms.length}
+          </span>
+        </div>
+        <svg
+          className={`w-4 h-4 text-text-tertiary transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
 
-      <div className="space-y-1.5">
-        {platforms.map((platform) => {
-          const config = platformConfig[platform.id];
-          const color = platformColors[platform.id];
-          const percentage = Math.round((platform.count / totalStories) * 100);
+      {isExpanded && (
+        <>
+          <div className="space-y-1.5 mt-3">
+            {platforms.map((platform) => {
+              const config = platformConfig[platform.id];
+              const color = platformColors[platform.id];
 
-          return (
-            <div key={platform.id} className="group flex items-center gap-2">
-              <div
-                className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
-                style={{ backgroundColor: `${color}15` }}
-              >
-                <PlatformIcon platform={platform.id} size={12} className="opacity-80" />
-              </div>
-              <span className="flex-1 text-xs text-text-secondary group-hover:text-text-primary transition-colors">
-                {config.name}
-              </span>
-              <span className="text-[10px] font-semibold text-text-tertiary tabular-nums">
-                {platform.count}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+              return (
+                <div key={platform.id} className="group flex items-center gap-2">
+                  <div
+                    className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
+                    style={{ backgroundColor: `${color}15` }}
+                  >
+                    <PlatformIcon platform={platform.id} size={12} className="opacity-80" />
+                  </div>
+                  <span className="flex-1 text-xs text-text-secondary group-hover:text-text-primary transition-colors">
+                    {config.name}
+                  </span>
+                  <span className="text-[10px] font-semibold text-text-tertiary tabular-nums">
+                    {platform.count}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
 
-      <div className="mt-3 pt-3 border-t border-border/30 flex items-center justify-between">
-        <span className="text-xs text-text-tertiary">Total stories</span>
-        <span className="text-sm font-bold text-text-primary">{totalStories}</span>
-      </div>
+          <div className="mt-3 pt-3 border-t border-border/30 flex items-center justify-between">
+            <span className="text-xs text-text-tertiary">Total stories</span>
+            <span className="text-sm font-bold text-text-primary">{totalStories}</span>
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
 function LiveStats() {
-  const [stats, setStats] = useState({ stories: 2847, hot: 42, readers: 12400 });
+  const [stats, setStats] = useState({ stories: 0, hot: 0, sources: 0 });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setStats(prev => ({
-        stories: prev.stories + Math.floor(Math.random() * 5),
-        hot: 30 + Math.floor(Math.random() * 25),
-        readers: prev.readers + Math.floor(Math.random() * 100 - 50),
-      }));
-    }, 4000);
-
-    return () => clearInterval(interval);
+    async function fetchStats() {
+      try {
+        const res = await fetch('/api/trending/stats');
+        const data = await res.json();
+        setStats(data);
+      } catch (error) {
+        console.error('Error fetching stats:', error);
+        // Fallback values
+        setStats({ stories: 60, hot: 10, sources: 3 });
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchStats();
   }, []);
 
   return (
@@ -139,23 +152,57 @@ function LiveStats() {
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <StatBox value={stats.stories} label="Stories" />
-        <StatBox value={stats.hot} label="Hot" />
-        <StatBox value={stats.readers} label="Reading" />
+        {loading ? (
+          <>
+            <div className="text-center animate-pulse">
+              <div className="h-6 w-12 mx-auto bg-bg-tertiary rounded mb-1" />
+              <div className="h-3 w-10 mx-auto bg-bg-tertiary rounded" />
+            </div>
+            <div className="text-center animate-pulse">
+              <div className="h-6 w-8 mx-auto bg-bg-tertiary rounded mb-1" />
+              <div className="h-3 w-6 mx-auto bg-bg-tertiary rounded" />
+            </div>
+            <div className="text-center animate-pulse">
+              <div className="h-6 w-6 mx-auto bg-bg-tertiary rounded mb-1" />
+              <div className="h-3 w-12 mx-auto bg-bg-tertiary rounded" />
+            </div>
+          </>
+        ) : (
+          <>
+            <StatBox value={stats.stories} label="Stories" />
+            <StatBox value={stats.hot} label="Hot" />
+            <StatBox value={stats.sources} label="Sources" />
+          </>
+        )}
       </div>
     </div>
   );
 }
 
+interface Topic {
+  tag: string;
+  count: string;
+  hot: boolean;
+}
+
 function TrendingTopics() {
-  const topics = [
-    { tag: 'Artificial Intelligence', count: '2.4K', hot: true },
-    { tag: 'Tech News', count: '1.8K', hot: true },
-    { tag: 'Politics', count: '1.2K', hot: false },
-    { tag: 'Science', count: '890', hot: false },
-    { tag: 'Gaming', count: '654', hot: false },
-    { tag: 'Finance', count: '523', hot: false },
-  ];
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchTopics() {
+      try {
+        const res = await fetch('/api/trending/topics');
+        const data = await res.json();
+        setTopics(data.topics || []);
+      } catch (error) {
+        console.error('Error fetching topics:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchTopics();
+  }, []);
 
   return (
     <div className="glass rounded-2xl p-4 backdrop-blur-xl">
@@ -169,29 +216,42 @@ function TrendingTopics() {
       </div>
 
       <div className="space-y-1">
-        {topics.map((topic, index) => (
-          <button
-            key={topic.tag}
-            className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-left hover:bg-bg-tertiary/50 transition-colors group"
-          >
-            <span className="text-xs font-medium text-text-tertiary w-4">
-              {index + 1}
-            </span>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                {topic.hot && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-                )}
-                <span className="text-sm text-text-primary group-hover:text-accent-brand transition-colors truncate">
-                  {topic.tag}
-                </span>
-              </div>
+        {loading ? (
+          // Loading skeleton
+          Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-2 px-2 py-2">
+              <div className="w-4 h-4 bg-bg-tertiary rounded animate-pulse" />
+              <div className="flex-1 h-4 bg-bg-tertiary rounded animate-pulse" />
+              <div className="w-8 h-3 bg-bg-tertiary rounded animate-pulse" />
             </div>
-            <span className="text-[10px] font-semibold text-text-tertiary">
-              {topic.count}
-            </span>
-          </button>
-        ))}
+          ))
+        ) : topics.length === 0 ? (
+          <p className="text-xs text-text-tertiary px-2 py-2">No topics available</p>
+        ) : (
+          topics.map((topic, index) => (
+            <button
+              key={topic.tag}
+              className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-left hover:bg-bg-tertiary/50 transition-colors group"
+            >
+              <span className="text-xs font-medium text-text-tertiary w-4">
+                {index + 1}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  {topic.hot && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+                  )}
+                  <span className="text-sm text-text-primary group-hover:text-accent-brand transition-colors truncate">
+                    {topic.tag}
+                  </span>
+                </div>
+              </div>
+              <span className="text-[10px] font-semibold text-text-tertiary">
+                {topic.count}
+              </span>
+            </button>
+          ))
+        )}
       </div>
     </div>
   );
@@ -252,8 +312,8 @@ export function Sidebar() {
   return (
     <div className="space-y-3">
       <LiveStats />
-      <SourcesOverview />
       <TrendingTopics />
+      <SourcesOverview />
       <AIFeedCard />
     </div>
   );
