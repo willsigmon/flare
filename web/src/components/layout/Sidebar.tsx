@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Platform, platformConfig } from '@/lib/types';
 import { PlatformIcon, platformColors } from '@/components/icons/PlatformIcons';
+import { decodeHtmlEntities } from '@/lib/utils';
 
 // Only REAL platforms with actual API integrations
 const platforms: { id: Platform; count: number }[] = [
@@ -242,7 +243,7 @@ function TrendingTopics() {
                     <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
                   )}
                   <span className="text-sm text-text-primary group-hover:text-accent-brand transition-colors truncate">
-                    {topic.tag}
+                    {decodeHtmlEntities(topic.tag)}
                   </span>
                 </div>
               </div>

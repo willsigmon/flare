@@ -6,26 +6,10 @@ import { ShareButtons } from '@/components/social/ShareButtons';
 import { PlatformIcon, CategoryIcon, Category, categoryColors, FireIcon, TrophyIcon } from '@/components/icons/PlatformIcons';
 import { useStoryPreview } from '@/components/preview';
 import { HeatBadge, getHoursOld } from '@/components/community';
+import { decodeHtmlEntities, formatNumber, formatTimeAgo } from '@/lib/utils';
 
 interface SpotlightCardProps {
   item: TrendingItem;
-}
-
-function formatTimeAgo(date: Date): string {
-  const now = new Date();
-  const diff = now.getTime() - new Date(date).getTime();
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-
-  if (hours < 1) return 'Just now';
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
-function formatNumber(num: number): string {
-  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
-  if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
-  return num.toString();
 }
 
 // Category-based detection for visual theming
@@ -66,7 +50,9 @@ function detectCategory(title: string): Category {
 export function SpotlightCard({ item }: SpotlightCardProps) {
   const { openPreview } = useStoryPreview();
   const config = platformConfig[item.platform];
-  const category = detectCategory(item.title);
+  const title = decodeHtmlEntities(item.title);
+  const description = item.description ? decodeHtmlEntities(item.description) : null;
+  const category = detectCategory(title);
   const categoryColor = categoryColors[category];
   const hasImage = item.imageUrl && item.imageUrl.length > 0;
 
@@ -164,11 +150,11 @@ export function SpotlightCard({ item }: SpotlightCardProps) {
           {/* Title and description */}
           <div className="my-6">
             <h2 className="text-2xl md:text-4xl font-black text-white leading-tight drop-shadow-lg">
-              {item.title}
+              {title}
             </h2>
-            {item.description && (
+            {description && (
               <p className="mt-3 text-base md:text-lg text-white/80 line-clamp-2 drop-shadow">
-                {item.description}
+                {description}
               </p>
             )}
           </div>
@@ -206,7 +192,7 @@ export function SpotlightCard({ item }: SpotlightCardProps) {
               />
               <ShareButtons
                 url={item.url || `https://flare.app/story/${item.id}`}
-                title={item.title}
+                title={title}
                 variant="overlay"
               />
               <VoteButtons
@@ -215,7 +201,7 @@ export function SpotlightCard({ item }: SpotlightCardProps) {
                 showFlareScore={true}
                 platform={item.platform}
                 category={category}
-                title={item.title}
+                title={title}
                 url={item.url}
               />
             </div>

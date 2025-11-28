@@ -5,27 +5,11 @@ import { VoteButtons } from '@/components/voting/VoteButtons';
 import { PlatformIcon, platformColors, CategoryIcon, Category, categoryColors } from '@/components/icons/PlatformIcons';
 import { useStoryPreview } from '@/components/preview';
 import { HeatBadge, getHoursOld } from '@/components/community';
+import { decodeHtmlEntities, formatNumber, formatTimeAgo } from '@/lib/utils';
 
 interface Top10CardProps {
   item: TrendingItem;
   rank: number;
-}
-
-function formatTimeAgo(date: Date): string {
-  const now = new Date();
-  const diff = now.getTime() - new Date(date).getTime();
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-
-  if (hours < 1) return 'now';
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `${days}d`;
-}
-
-function formatNumber(num: number): string {
-  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
-  if (num >= 1_000) return `${(num / 1_000).toFixed(0)}K`;
-  return num.toString();
 }
 
 // Category-based detection for visual theming
@@ -62,7 +46,8 @@ export function Top10Card({ item, rank }: Top10CardProps) {
   const { openPreview } = useStoryPreview();
   const config = platformConfig[item.platform];
   const color = platformColors[item.platform] || '#3b82f6';
-  const category = detectCategory(item.title);
+  const title = decodeHtmlEntities(item.title);
+  const category = detectCategory(title);
   const categoryColor = categoryColors[category];
   const hasImage = item.imageUrl && item.imageUrl.length > 0;
   const gradient = rankGradients[rank] || 'from-gray-500 to-gray-600';
@@ -125,7 +110,7 @@ export function Top10Card({ item, rank }: Top10CardProps) {
         {/* Title */}
         <div className="mt-3">
           <h3 className="text-base md:text-lg font-bold text-white line-clamp-2 drop-shadow-md group-hover:text-white transition-colors title-hover">
-            {item.title}
+            {title}
           </h3>
         </div>
 
@@ -148,7 +133,7 @@ export function Top10Card({ item, rank }: Top10CardProps) {
               showLabel={false}
             />
             <span className="text-white/60 text-xs">
-              {formatTimeAgo(item.timestamp)}
+              {formatTimeAgo(item.timestamp, true)}
             </span>
           </div>
 
@@ -160,7 +145,7 @@ export function Top10Card({ item, rank }: Top10CardProps) {
               showFlareScore={true}
               platform={item.platform}
               category={category}
-              title={item.title}
+              title={title}
               url={item.url}
             />
           </div>

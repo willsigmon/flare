@@ -82,11 +82,11 @@ export function FilterableFeed({ items }: FilterableFeedProps) {
   const restItems = showTop10Layout ? filteredItems.slice(10, 60) : filteredItems.slice(0, 50);
 
   return (
-    <div className="space-y-6">
-      {/* Top Filter Bar - Time + Discovery + Personalization */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        {/* Left: Time Filters */}
-        <div className="flex items-center gap-1 bg-bg-secondary rounded-lg p-1">
+    <div className="space-y-4">
+      {/* Unified Filter Bar */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {/* Time Filters */}
+        <div className="flex items-center bg-bg-secondary rounded-lg p-0.5">
           {timeFilters.map((filter) => (
             <button
               key={filter.id}
@@ -94,8 +94,8 @@ export function FilterableFeed({ items }: FilterableFeedProps) {
               className={`
                 px-3 py-1.5 text-xs font-medium rounded-md transition-all
                 ${selectedTime === filter.id
-                  ? 'bg-accent-primary text-white shadow-sm'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
+                  ? 'bg-bg-primary text-text-primary shadow-sm'
+                  : 'text-text-tertiary hover:text-text-secondary'
                 }
               `}
             >
@@ -104,84 +104,74 @@ export function FilterableFeed({ items }: FilterableFeedProps) {
           ))}
         </div>
 
-        {/* Right: Discovery Mode + Personalization */}
-        <div className="flex items-center gap-4">
-          {/* Discovery Mode Toggle */}
-          <button
-            onClick={() => setDiscoveryMode(!discoveryMode)}
-            className={`
-              flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all
-              ${discoveryMode
-                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-                : 'bg-bg-secondary text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
-              }
-            `}
-            title={discoveryMode ? 'Showing random content' : 'Enable discovery mode for random content'}
-          >
-            <span className={discoveryMode ? 'animate-spin' : ''} style={{ animationDuration: '3s' }}>🎲</span>
-            <span>Discovery</span>
-          </button>
+        {/* Separator */}
+        <div className="w-px h-6 bg-border hidden sm:block" />
 
-          {/* Personalization Indicator */}
-          {user && !discoveryMode && (
-            <div className="flex items-center gap-2">
-              {isPersonalized ? (
-                <>
-                  <span className="text-accent-positive text-sm">✨</span>
-                  <span className="text-xs text-text-secondary">
-                    Personalized
-                  </span>
-                  <span className="text-xs text-text-muted">
-                    ({stats?.totalVotes})
-                  </span>
-                </>
-              ) : (
-                <span className="text-xs text-text-muted">
-                  Vote {5 - (stats?.totalVotes || 0)} more to personalize
+        {/* Platform Filters */}
+        <div className="flex items-center gap-1.5">
+          {platformFilters.map((filter) => {
+            const isSelected = selectedPlatform === filter.id;
+            const itemCount = filter.id === 'all'
+              ? items.length
+              : items.filter(item => item.platform === filter.id).length;
+
+            // Skip platforms with no items
+            if (itemCount === 0 && filter.id !== 'all') return null;
+
+            return (
+              <button
+                key={filter.id}
+                onClick={() => setSelectedPlatform(filter.id)}
+                className={`
+                  flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium
+                  transition-all whitespace-nowrap
+                  ${isSelected
+                    ? 'text-white'
+                    : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
+                  }
+                `}
+                style={isSelected ? { backgroundColor: filter.color } : undefined}
+              >
+                {filter.id === 'all' ? (
+                  <FireIcon size={14} />
+                ) : (
+                  <PlatformIcon platform={filter.id} size={14} />
+                )}
+                <span>{filter.label}</span>
+                <span className={`tabular-nums ${isSelected ? 'text-white/70' : 'text-text-muted'}`}>
+                  {itemCount}
                 </span>
-              )}
-            </div>
-          )}
+              </button>
+            );
+          })}
         </div>
-      </div>
 
-      {/* Platform Filter Chips */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
-        {platformFilters.map((filter) => {
-          const isSelected = selectedPlatform === filter.id;
-          const itemCount = filter.id === 'all'
-            ? items.length
-            : items.filter(item => item.platform === filter.id).length;
+        {/* Spacer */}
+        <div className="flex-1" />
 
-          // Skip platforms with no items
-          if (itemCount === 0 && filter.id !== 'all') return null;
+        {/* Discovery Mode Toggle */}
+        <button
+          onClick={() => setDiscoveryMode(!discoveryMode)}
+          className={`
+            flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all
+            ${discoveryMode
+              ? 'bg-purple-500/20 text-purple-400'
+              : 'bg-bg-secondary text-text-tertiary hover:text-text-secondary'
+            }
+          `}
+          title={discoveryMode ? 'Showing random content' : 'Enable discovery mode'}
+        >
+          <span className={discoveryMode ? 'animate-spin' : ''} style={{ animationDuration: '3s' }}>🎲</span>
+          <span className="hidden sm:inline">Discovery</span>
+        </button>
 
-          return (
-            <button
-              key={filter.id}
-              onClick={() => setSelectedPlatform(filter.id)}
-              className={`
-                flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium
-                transition-all duration-200 whitespace-nowrap
-                ${isSelected
-                  ? 'text-white shadow-lg scale-105'
-                  : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
-                }
-              `}
-              style={isSelected ? { backgroundColor: filter.color } : undefined}
-            >
-              {filter.id === 'all' ? (
-                <FireIcon size={16} />
-              ) : (
-                <PlatformIcon platform={filter.id} size={16} />
-              )}
-              <span>{filter.label}</span>
-              <span className={`text-xs ${isSelected ? 'text-white/70' : 'text-text-muted'}`}>
-                {itemCount}
-              </span>
-            </button>
-          );
-        })}
+        {/* Personalization Indicator */}
+        {user && !discoveryMode && isPersonalized && (
+          <div className="flex items-center gap-1 text-xs text-text-tertiary">
+            <span className="text-accent-positive">✨</span>
+            <span className="hidden sm:inline">Personalized</span>
+          </div>
+        )}
       </div>
 
       {/* ========== TOP 10 SPECIAL LAYOUT ========== */}
