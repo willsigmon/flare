@@ -5,6 +5,7 @@ import { VoteButtons } from '@/components/voting/VoteButtons';
 import { ShareButtons } from '@/components/social/ShareButtons';
 import { PlatformIcon, CategoryIcon, Category, categoryColors, FireIcon, TrophyIcon } from '@/components/icons/PlatformIcons';
 import { useStoryPreview } from '@/components/preview';
+import { HeatBadge, getHoursOld } from '@/components/community';
 
 interface SpotlightCardProps {
   item: TrendingItem;
@@ -195,13 +196,28 @@ export function SpotlightCard({ item }: SpotlightCardProps) {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-2 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+              {/* Heat Badge */}
+              <HeatBadge
+                engagementCount={item.engagementCount || 0}
+                hoursOld={getHoursOld(item.timestamp)}
+                size="md"
+                showLabel={true}
+              />
               <ShareButtons
                 url={item.url || `https://flare.app/story/${item.id}`}
                 title={item.title}
                 variant="overlay"
               />
-              <VoteButtons itemId={item.id} variant="overlay" />
+              <VoteButtons
+                itemId={item.id}
+                variant="community"
+                showFlareScore={true}
+                platform={item.platform}
+                category={category}
+                title={item.title}
+                url={item.url}
+              />
             </div>
           </div>
         </div>

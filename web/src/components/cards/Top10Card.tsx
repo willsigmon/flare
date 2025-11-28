@@ -4,6 +4,7 @@ import { TrendingItem, platformConfig } from '@/lib/types';
 import { VoteButtons } from '@/components/voting/VoteButtons';
 import { PlatformIcon, platformColors, CategoryIcon, Category, categoryColors } from '@/components/icons/PlatformIcons';
 import { useStoryPreview } from '@/components/preview';
+import { HeatBadge, getHoursOld } from '@/components/community';
 
 interface Top10CardProps {
   item: TrendingItem;
@@ -130,7 +131,7 @@ export function Top10Card({ item, rank }: Top10CardProps) {
 
         {/* Bottom row - Stats */}
         <div className="flex items-center justify-between mt-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <div
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-white font-semibold text-sm"
               style={{ backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)' }}
@@ -140,6 +141,12 @@ export function Top10Card({ item, rank }: Top10CardProps) {
                 {item.engagementLabel || 'pts'}
               </span>
             </div>
+            <HeatBadge
+              engagementCount={item.engagementCount || 0}
+              hoursOld={getHoursOld(item.timestamp)}
+              size="sm"
+              showLabel={false}
+            />
             <span className="text-white/60 text-xs">
               {formatTimeAgo(item.timestamp)}
             </span>
@@ -147,7 +154,15 @@ export function Top10Card({ item, rank }: Top10CardProps) {
 
           {/* Vote buttons */}
           <div className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto" onClick={(e) => e.stopPropagation()}>
-            <VoteButtons itemId={item.id} variant="minimal" />
+            <VoteButtons
+              itemId={item.id}
+              variant="minimal"
+              showFlareScore={true}
+              platform={item.platform}
+              category={category}
+              title={item.title}
+              url={item.url}
+            />
           </div>
         </div>
       </div>

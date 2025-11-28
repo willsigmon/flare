@@ -6,14 +6,35 @@ import { useAuth } from '@/components/auth/AuthProvider';
 type VoteState = 'up' | 'down' | null;
 type VoteValue = 1 | -1 | 0;
 
+// ============================================
+// Types
+// ============================================
+interface FlareScore {
+  articleId: string;
+  upvotes: number;
+  downvotes: number;
+  score: number;
+  voterCount: number;
+  userVote: number;
+}
+
 interface VoteButtonsProps {
   itemId: string;
   platform?: string;
   category?: string;
   title?: string;
   url?: string;
-  variant?: 'default' | 'compact' | 'overlay' | 'minimal';
+  variant?: 'default' | 'compact' | 'overlay' | 'minimal' | 'hero' | 'community';
+  showFlareScore?: boolean;
+  initialFlareScore?: FlareScore;
   onVote?: (vote: VoteState) => void;
+}
+
+interface VoteMetadata {
+  platform?: string;
+  category?: string;
+  title?: string;
+  url?: string;
 }
 
 // localStorage key for anonymous votes
@@ -24,15 +45,9 @@ const VOTES_STORAGE_KEY = 'flare_votes';
 // ============================================
 interface VoteContextType {
   votes: Record<string, VoteValue>;
+  flareScores: Record<string, FlareScore>;
   setVote: (articleId: string, vote: VoteValue, metadata?: VoteMetadata) => void;
   isLoading: boolean;
-}
-
-interface VoteMetadata {
-  platform?: string;
-  category?: string;
-  title?: string;
-  url?: string;
 }
 
 const VoteContext = createContext<VoteContextType | undefined>(undefined);
@@ -40,6 +55,7 @@ const VoteContext = createContext<VoteContextType | undefined>(undefined);
 export function VoteProvider({ children }: { children: ReactNode }) {
   const { user, isLoading: authLoading } = useAuth();
   const [votes, setVotes] = useState<Record<string, VoteValue>>({});
+  const [flareScores, setFlareScores] = useState<Record<string, FlareScore>>({});
   const [isLoading, setIsLoading] = useState(true);
 
   // Load votes on auth change
@@ -94,8 +110,30 @@ export function VoteProvider({ children }: { children: ReactNode }) {
   }, [user, authLoading]);
 
   const setVote = useCallback(async (articleId: string, vote: VoteValue, metadata?: VoteMetadata) => {
-    // Optimistic update
+    const previousVote = votes[articleId] || 0;
+
+    // Optimistic update for votes
     setVotes(prev => ({ ...prev, [articleId]: vote }));
+
+    // Optimistic update for flare scores
+    setFlareScores(prev => {
+      const current = prev[articleId] || { articleId, upvotes: 0, downvotes: 0, score: 0, voterCount: 0, userVote: 0 };
+      const newScore = { ...current };
+
+      // Adjust based on vote change
+      if (previousVote === 1) newScore.upvotes--;
+      if (previousVote === -1) newScore.downvotes--;
+      if (vote === 1) newScore.upvotes++;
+      if (vote === -1) newScore.downvotes++;
+
+      newScore.score = newScore.upvotes - newScore.downvotes;
+      newScore.userVote = vote;
+
+      if (previousVote === 0 && vote !== 0) newScore.voterCount++;
+      if (previousVote !== 0 && vote === 0) newScore.voterCount--;
+
+      return { ...prev, [articleId]: newScore };
+    });
 
     if (user) {
       // Authenticated: save to server
@@ -114,16 +152,17 @@ export function VoteProvider({ children }: { children: ReactNode }) {
         });
       } catch (error) {
         console.error('Error saving vote:', error);
-        // Revert on error (optional)
+        // Revert on error
+        setVotes(prev => ({ ...prev, [articleId]: previousVote }));
       }
     } else {
       // Anonymous: save to localStorage
       saveLocalStorageVote(articleId, vote);
     }
-  }, [user]);
+  }, [user, votes]);
 
   return (
-    <VoteContext.Provider value={{ votes, setVote, isLoading }}>
+    <VoteContext.Provider value={{ votes, flareScores, setVote, isLoading }}>
       {children}
     </VoteContext.Provider>
   );
@@ -146,7 +185,6 @@ function getLocalStorageVotes(): Record<string, VoteValue> {
     const stored = localStorage.getItem(VOTES_STORAGE_KEY);
     if (!stored) return {};
     const parsed = JSON.parse(stored);
-    // Convert 'up'/'down' to 1/-1 for consistency
     const converted: Record<string, VoteValue> = {};
     Object.entries(parsed).forEach(([key, value]) => {
       if (value === 'up' || value === 1) converted[key] = 1;
@@ -175,6 +213,34 @@ function saveLocalStorageVote(articleId: string, vote: VoteValue) {
 }
 
 // ============================================
+// SVG Icons
+// ============================================
+function UpArrowIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 4l-8 8h5v8h6v-8h5l-8-8z" />
+    </svg>
+  );
+}
+
+function DownArrowIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 20l8-8h-5V4H9v8H4l8 8z" />
+    </svg>
+  );
+}
+
+// ============================================
+// Format helpers
+// ============================================
+function formatCount(count: number): string {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
+  return count.toString();
+}
+
+// ============================================
 // VoteButtons Component
 // ============================================
 export function VoteButtons({
@@ -184,45 +250,135 @@ export function VoteButtons({
   title,
   url,
   variant = 'default',
+  showFlareScore = false,
+  initialFlareScore,
   onVote
 }: VoteButtonsProps) {
-  const { votes, setVote } = useVotes();
+  const { votes, flareScores, setVote } = useVotes();
   const [isAnimating, setIsAnimating] = useState<'up' | 'down' | null>(null);
+  const [showGlow, setShowGlow] = useState(false);
 
   const currentVote = votes[itemId] || 0;
   const voteState: VoteState = currentVote === 1 ? 'up' : currentVote === -1 ? 'down' : null;
+
+  // Get flare score (from context or initial prop)
+  const flareScore = flareScores[itemId] || initialFlareScore;
+  const displayScore = flareScore?.score || 0;
 
   const handleVote = (clickedVote: 'up' | 'down') => {
     // Toggle off if clicking same vote
     const newVoteState: VoteState = voteState === clickedVote ? null : clickedVote;
     const newVoteValue: VoteValue = newVoteState === 'up' ? 1 : newVoteState === 'down' ? -1 : 0;
 
-    // Animate
+    // Trigger animations
     setIsAnimating(clickedVote);
-    setTimeout(() => setIsAnimating(null), 200);
+    if (newVoteState === 'up') {
+      setShowGlow(true);
+      setTimeout(() => setShowGlow(false), 400);
+    }
+    setTimeout(() => setIsAnimating(null), 300);
 
     // Update state
     setVote(itemId, newVoteValue, { platform, category, title, url });
     onVote?.(newVoteState);
   };
 
-  const baseClasses = {
-    default: 'p-2 rounded-lg transition-all duration-150',
-    compact: 'p-1.5 rounded-md transition-all duration-150',
-    overlay: 'p-2 rounded-full bg-bg-secondary/80 backdrop-blur transition-all duration-150',
-    minimal: 'p-0.5 transition-all duration-150',
-  };
+  // ============================================
+  // Hero variant - Large Product Hunt style
+  // ============================================
+  if (variant === 'hero') {
+    return (
+      <div className="flex flex-col items-center gap-1">
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleVote('up');
+          }}
+          className={`
+            vote-btn flex flex-col items-center justify-center
+            w-14 h-14 rounded-xl font-bold
+            ${voteState === 'up'
+              ? 'voted-up bg-vote-positive text-white shadow-lg'
+              : 'bg-bg-secondary hover:bg-bg-tertiary text-text-secondary hover:text-vote-positive'
+            }
+            ${isAnimating === 'up' ? 'animate-pop' : ''}
+            ${showGlow && voteState === 'up' ? 'animate-glow' : ''}
+          `}
+          title="Upvote"
+          aria-label="Upvote"
+        >
+          <UpArrowIcon className="w-6 h-6" />
+          {showFlareScore && (
+            <span className={`text-sm font-bold mt-0.5 vote-count ${isAnimating === 'up' ? 'animate-flip' : ''}`}>
+              {formatCount(displayScore)}
+            </span>
+          )}
+        </button>
+        {showFlareScore && flareScore && (
+          <span className="text-xs text-text-tertiary">
+            {flareScore.voterCount} vote{flareScore.voterCount !== 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+    );
+  }
 
-  // IMPORTANT: Default state is NEUTRAL GRAY, only colored when voted
-  const upClasses = voteState === 'up'
-    ? 'bg-accent-positive/20 text-accent-positive'
-    : 'text-text-muted hover:text-accent-positive hover:bg-accent-positive/10';
+  // ============================================
+  // Community variant - Prominent with count
+  // ============================================
+  if (variant === 'community') {
+    return (
+      <div className="flex items-center gap-2">
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleVote('up');
+          }}
+          className={`
+            vote-btn flex items-center gap-2 px-3 py-2 rounded-lg font-semibold
+            ${voteState === 'up'
+              ? 'voted-up bg-vote-positive text-white'
+              : 'bg-bg-secondary hover:bg-bg-tertiary text-text-secondary hover:text-vote-positive border border-border'
+            }
+            ${isAnimating === 'up' ? 'animate-pop' : ''}
+            ${showGlow && voteState === 'up' ? 'animate-glow' : ''}
+          `}
+          title="Upvote"
+          aria-label="Upvote"
+        >
+          <UpArrowIcon className="w-5 h-5" />
+          <span className={`vote-count ${isAnimating === 'up' ? 'animate-flip' : ''}`}>
+            {formatCount(displayScore)}
+          </span>
+        </button>
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleVote('down');
+          }}
+          className={`
+            vote-btn p-2 rounded-lg
+            ${voteState === 'down'
+              ? 'voted-down bg-vote-negative/20 text-vote-negative'
+              : 'text-text-muted hover:text-vote-negative hover:bg-vote-negative/10'
+            }
+            ${isAnimating === 'down' ? 'animate-pop' : ''}
+          `}
+          title="Downvote"
+          aria-label="Downvote"
+        >
+          <DownArrowIcon className="w-5 h-5" />
+        </button>
+      </div>
+    );
+  }
 
-  const downClasses = voteState === 'down'
-    ? 'bg-accent-negative/20 text-accent-negative'
-    : 'text-text-muted hover:text-accent-negative hover:bg-accent-negative/10';
-
-  // Minimal variant - vertical Reddit-style
+  // ============================================
+  // Minimal variant - Vertical Reddit-style
+  // ============================================
   if (variant === 'minimal') {
     return (
       <div className="flex flex-col items-center gap-0">
@@ -232,13 +388,131 @@ export function VoteButtons({
             e.stopPropagation();
             handleVote('up');
           }}
-          className={`${baseClasses.minimal} ${upClasses} ${isAnimating === 'up' ? 'scale-125' : ''} rounded`}
-          title="More like this"
-          aria-label="More like this"
+          className={`
+            vote-btn p-1 rounded
+            ${voteState === 'up'
+              ? 'voted-up text-vote-positive'
+              : 'text-text-muted hover:text-vote-positive'
+            }
+            ${isAnimating === 'up' ? 'animate-pop' : ''}
+          `}
+          title="Upvote"
+          aria-label="Upvote"
         >
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M10 3l-7 7h4v7h6v-7h4l-7-7z" />
-          </svg>
+          <UpArrowIcon className="w-4 h-4" />
+        </button>
+        {showFlareScore && (
+          <span className={`
+            text-xs font-semibold tabular-nums
+            ${voteState === 'up' ? 'text-vote-positive' : voteState === 'down' ? 'text-vote-negative' : 'text-text-secondary'}
+            vote-count ${isAnimating ? 'animate-flip' : ''}
+          `}>
+            {formatCount(displayScore)}
+          </span>
+        )}
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleVote('down');
+          }}
+          className={`
+            vote-btn p-1 rounded
+            ${voteState === 'down'
+              ? 'voted-down text-vote-negative'
+              : 'text-text-muted hover:text-vote-negative'
+            }
+            ${isAnimating === 'down' ? 'animate-pop' : ''}
+          `}
+          title="Downvote"
+          aria-label="Downvote"
+        >
+          <DownArrowIcon className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }
+
+  // ============================================
+  // Compact variant - Horizontal small
+  // ============================================
+  if (variant === 'compact') {
+    return (
+      <div className="flex items-center gap-1">
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleVote('up');
+          }}
+          className={`
+            vote-btn p-1.5 rounded-md
+            ${voteState === 'up'
+              ? 'voted-up bg-vote-positive/20 text-vote-positive'
+              : 'text-text-muted hover:text-vote-positive hover:bg-vote-positive/10'
+            }
+            ${isAnimating === 'up' ? 'animate-pop' : ''}
+          `}
+          title="Upvote"
+          aria-label="Upvote"
+        >
+          <UpArrowIcon className="w-4 h-4" />
+        </button>
+        {showFlareScore && (
+          <span className={`
+            text-xs font-semibold tabular-nums min-w-[20px] text-center
+            ${voteState === 'up' ? 'text-vote-positive' : voteState === 'down' ? 'text-vote-negative' : 'text-text-secondary'}
+          `}>
+            {formatCount(displayScore)}
+          </span>
+        )}
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleVote('down');
+          }}
+          className={`
+            vote-btn p-1.5 rounded-md
+            ${voteState === 'down'
+              ? 'voted-down bg-vote-negative/20 text-vote-negative'
+              : 'text-text-muted hover:text-vote-negative hover:bg-vote-negative/10'
+            }
+            ${isAnimating === 'down' ? 'animate-pop' : ''}
+          `}
+          title="Downvote"
+          aria-label="Downvote"
+        >
+          <DownArrowIcon className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }
+
+  // ============================================
+  // Overlay variant - For card overlays
+  // ============================================
+  if (variant === 'overlay') {
+    return (
+      <div className="flex items-center gap-1">
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleVote('up');
+          }}
+          className={`
+            vote-btn p-2 rounded-full bg-black/40 backdrop-blur-sm
+            ${voteState === 'up'
+              ? 'voted-up text-vote-positive'
+              : 'text-white/80 hover:text-vote-positive hover:bg-black/60'
+            }
+            ${isAnimating === 'up' ? 'animate-pop' : ''}
+          `}
+          title="Upvote"
+          aria-label="Upvote"
+        >
+          <UpArrowIcon className="w-5 h-5" />
         </button>
         <button
           onClick={(e) => {
@@ -246,43 +520,75 @@ export function VoteButtons({
             e.stopPropagation();
             handleVote('down');
           }}
-          className={`${baseClasses.minimal} ${downClasses} ${isAnimating === 'down' ? 'scale-125' : ''} rounded`}
-          title="Less like this"
-          aria-label="Less like this"
+          className={`
+            vote-btn p-2 rounded-full bg-black/40 backdrop-blur-sm
+            ${voteState === 'down'
+              ? 'voted-down text-vote-negative'
+              : 'text-white/80 hover:text-vote-negative hover:bg-black/60'
+            }
+            ${isAnimating === 'down' ? 'animate-pop' : ''}
+          `}
+          title="Downvote"
+          aria-label="Downvote"
         >
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M10 17l7-7h-4V3H7v7H3l7 7z" />
-          </svg>
+          <DownArrowIcon className="w-5 h-5" />
         </button>
       </div>
     );
   }
 
+  // ============================================
+  // Default variant - Standard horizontal
+  // ============================================
   return (
-    <div className={`flex ${variant === 'compact' ? 'gap-1' : 'gap-2'}`}>
+    <div className="flex items-center gap-2">
       <button
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
           handleVote('up');
         }}
-        className={`${baseClasses[variant]} ${upClasses} ${isAnimating === 'up' ? 'scale-125' : ''}`}
-        title="More like this"
-        aria-label="More like this"
+        className={`
+          vote-btn p-2 rounded-lg
+          ${voteState === 'up'
+            ? 'voted-up bg-vote-positive/20 text-vote-positive'
+            : 'text-text-muted hover:text-vote-positive hover:bg-vote-positive/10'
+          }
+          ${isAnimating === 'up' ? 'animate-pop' : ''}
+          ${showGlow && voteState === 'up' ? 'animate-glow' : ''}
+        `}
+        title="Upvote"
+        aria-label="Upvote"
       >
-        <span className={variant === 'compact' ? 'text-base' : 'text-lg'}>👍</span>
+        <UpArrowIcon className="w-5 h-5" />
       </button>
+      {showFlareScore && (
+        <span className={`
+          text-sm font-semibold tabular-nums min-w-[24px] text-center
+          ${voteState === 'up' ? 'text-vote-positive' : voteState === 'down' ? 'text-vote-negative' : 'text-text-secondary'}
+          vote-count ${isAnimating ? 'animate-flip' : ''}
+        `}>
+          {formatCount(displayScore)}
+        </span>
+      )}
       <button
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
           handleVote('down');
         }}
-        className={`${baseClasses[variant]} ${downClasses} ${isAnimating === 'down' ? 'scale-125' : ''}`}
-        title="Less like this"
-        aria-label="Less like this"
+        className={`
+          vote-btn p-2 rounded-lg
+          ${voteState === 'down'
+            ? 'voted-down bg-vote-negative/20 text-vote-negative'
+            : 'text-text-muted hover:text-vote-negative hover:bg-vote-negative/10'
+          }
+          ${isAnimating === 'down' ? 'animate-pop' : ''}
+        `}
+        title="Downvote"
+        aria-label="Downvote"
       >
-        <span className={variant === 'compact' ? 'text-base' : 'text-lg'}>👎</span>
+        <DownArrowIcon className="w-5 h-5" />
       </button>
     </div>
   );
@@ -293,4 +599,10 @@ export function useVote(itemId: string): VoteState {
   const { votes } = useVotes();
   const currentVote = votes[itemId] || 0;
   return currentVote === 1 ? 'up' : currentVote === -1 ? 'down' : null;
+}
+
+// Hook for getting flare score
+export function useFlareScore(itemId: string): FlareScore | undefined {
+  const { flareScores } = useVotes();
+  return flareScores[itemId];
 }

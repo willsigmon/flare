@@ -5,6 +5,7 @@ import { VoteButtons } from '@/components/voting/VoteButtons';
 import { ShareButtons } from '@/components/social/ShareButtons';
 import { PlatformIcon, CategoryIcon, Category, categoryColors } from '@/components/icons/PlatformIcons';
 import { useStoryPreview } from '@/components/preview';
+import { HeatBadge, getHoursOld } from '@/components/community';
 
 interface HeroCardProps {
   item: TrendingItem;
@@ -200,13 +201,26 @@ export function HeroCard({ item, rank, size = 'large' }: HeroCardProps) {
       </div>
 
       {/* Action buttons - show on hover */}
-      <div className={`absolute ${isLarge ? 'bottom-6 right-6' : 'bottom-5 right-5'} z-30 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto`}>
+      <div className={`absolute ${isLarge ? 'bottom-6 right-6' : 'bottom-5 right-5'} z-30 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto`}>
+        <HeatBadge
+          engagementCount={item.engagementCount || 0}
+          hoursOld={getHoursOld(item.timestamp)}
+          size="sm"
+          showLabel={true}
+        />
         <ShareButtons
           url={item.url || `https://flare.app/story/${item.id}`}
           title={item.title}
           variant="overlay"
         />
-        <VoteButtons itemId={item.id} variant="overlay" />
+        <VoteButtons
+          itemId={item.id}
+          variant="overlay"
+          platform={item.platform}
+          category={category}
+          title={item.title}
+          url={item.url}
+        />
       </div>
     </article>
   );

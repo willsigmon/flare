@@ -4,6 +4,7 @@ import { TrendingItem, platformConfig } from '@/lib/types';
 import { VoteButtons } from '@/components/voting/VoteButtons';
 import { PlatformIcon, platformColors } from '@/components/icons/PlatformIcons';
 import { useStoryPreview } from '@/components/preview';
+import { HeatBadge, getHoursOld } from '@/components/community';
 
 interface CompactRowProps {
   item: TrendingItem;
@@ -66,7 +67,14 @@ export function CompactRow({ item, rank }: CompactRowProps) {
 
       {/* Vote buttons */}
       <div className="flex-shrink-0 relative z-20">
-        <VoteButtons itemId={item.id} variant="minimal" />
+        <VoteButtons
+          itemId={item.id}
+          variant="minimal"
+          showFlareScore={true}
+          platform={item.platform}
+          title={item.title}
+          url={item.url}
+        />
       </div>
 
       {/* Content */}
@@ -82,6 +90,12 @@ export function CompactRow({ item, rank }: CompactRowProps) {
           <span className="font-semibold text-text-secondary">
             {formatNumber(item.engagementCount || 0)}
           </span>
+          <HeatBadge
+            engagementCount={item.engagementCount || 0}
+            hoursOld={getHoursOld(item.timestamp)}
+            size="sm"
+            showLabel={false}
+          />
           <span className="text-text-muted">·</span>
           <span>{formatTimeAgo(item.timestamp)}</span>
         </div>

@@ -32,6 +32,37 @@
   --accent-positive: #10b981;
   --accent-negative: #ef4444;
   --accent-brand: #3b82f6;
+
+  /* Voting colors - Product Hunt inspired */
+  --vote-positive: #ff6b35;
+  --vote-positive-hover: #ff5722;
+  --vote-positive-active: #e64a19;
+  --vote-positive-glow: rgba(255, 107, 53, 0.4);
+  --vote-negative: #6b7280;
+  --vote-negative-hover: #4b5563;
+  --vote-neutral: #9ca3af;
+  --vote-count-bg: rgba(255, 107, 53, 0.1);
+
+  /* Heat/Trending colors */
+  --heat-warm: #f59e0b;
+  --heat-hot: #f97316;
+  --heat-fire: #ef4444;
+  --heat-viral: linear-gradient(135deg, #ef4444, #f97316);
+
+  /* Rank badge gradients */
+  --rank-gold: linear-gradient(135deg, #fbbf24, #f59e0b);
+  --rank-silver: linear-gradient(135deg, #d1d5db, #9ca3af);
+  --rank-bronze: linear-gradient(135deg, #d97706, #b45309);
+
+  /* Animation easings */
+  --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Shadows */
+  --shadow-vote-glow: 0 0 12px var(--vote-positive-glow);
+  --shadow-card-hover: 0 20px 40px rgba(0, 0, 0, 0.15);
+  --shadow-card-active: 0 8px 20px rgba(0, 0, 0, 0.1);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -57,6 +88,14 @@
     /* Card (glass effect) */
     --card-bg: rgba(24, 24, 27, 0.8);
     --card-border: rgba(255, 255, 255, 0.08);
+
+    /* Voting colors - adjusted for dark mode */
+    --vote-positive-glow: rgba(255, 107, 53, 0.3);
+    --vote-count-bg: rgba(255, 107, 53, 0.15);
+
+    /* Shadows - adjusted for dark mode */
+    --shadow-card-hover: 0 20px 40px rgba(0, 0, 0, 0.4);
+    --shadow-card-active: 0 8px 20px rgba(0, 0, 0, 0.3);
   }
 }
 
@@ -85,6 +124,19 @@
   --color-platform-youtube: #ff0000;
   --color-platform-threads: #000000;
   --color-platform-local: #10b981;
+
+  /* Voting colors */
+  --color-vote-positive: var(--vote-positive);
+  --color-vote-positive-hover: var(--vote-positive-hover);
+  --color-vote-negative: var(--vote-negative);
+  --color-vote-neutral: var(--vote-neutral);
+  --color-vote-glow: var(--vote-positive-glow);
+
+  /* Heat colors */
+  --color-heat-warm: var(--heat-warm);
+  --color-heat-hot: var(--heat-hot);
+  --color-heat-fire: var(--heat-fire);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -224,25 +276,162 @@ body {
 }
 
 /* ==========================================================================
-   Vote Button States
+   Vote Button States - Product Hunt Style
    ========================================================================== */
 
 .vote-btn {
-  transition: all 0.15s ease;
+  transition: all 0.2s var(--ease-smooth);
+  position: relative;
 }
 
 .vote-btn:hover {
-  transform: scale(1.1);
+  transform: scale(1.05);
 }
 
+.vote-btn:active {
+  transform: scale(0.95);
+}
+
+/* Voted up state - warm orange */
 .vote-btn.voted-up {
-  color: var(--accent-positive);
-  background: rgba(16, 185, 129, 0.1);
+  color: var(--vote-positive);
+  background: var(--vote-count-bg);
 }
 
+/* Voted down state - neutral gray */
 .vote-btn.voted-down {
-  color: var(--accent-negative);
-  background: rgba(239, 68, 68, 0.1);
+  color: var(--vote-negative);
+  background: rgba(107, 114, 128, 0.1);
+}
+
+/* Vote pop animation - elastic bounce */
+@keyframes vote-pop {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.3); }
+  50% { transform: scale(0.9); }
+  70% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+.vote-btn.animate-pop {
+  animation: vote-pop 0.3s var(--ease-bounce);
+}
+
+/* Vote glow animation - ripple out */
+@keyframes vote-glow {
+  0% { box-shadow: 0 0 0 0 var(--vote-positive-glow); }
+  70% { box-shadow: 0 0 0 10px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+.vote-btn.voted-up.animate-glow {
+  animation: vote-glow 0.4s ease-out;
+}
+
+/* Count flip animation */
+@keyframes count-flip {
+  0% { transform: translateY(0); opacity: 1; }
+  45% { transform: translateY(-100%); opacity: 0; }
+  55% { transform: translateY(100%); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+.vote-count.animate-flip {
+  animation: count-flip 0.3s ease-out;
+}
+
+/* ==========================================================================
+   Heat/Trending Indicators
+   ========================================================================== */
+
+.heat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.heat-warm {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--heat-warm);
+}
+
+.heat-hot {
+  background: rgba(249, 115, 22, 0.2);
+  color: var(--heat-hot);
+}
+
+.heat-fire {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--heat-fire);
+  animation: heat-pulse 1.5s ease-in-out infinite;
+}
+
+.heat-viral {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(249, 115, 22, 0.2));
+  color: #fff;
+  background-size: 200% 200%;
+  animation: heat-glow 1s ease infinite, gradient-shift 3s ease infinite;
+}
+
+@keyframes heat-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes heat-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(239, 68, 68, 0.5); }
+  50% { box-shadow: 0 0 16px rgba(249, 115, 22, 0.7); }
+}
+
+/* ==========================================================================
+   Rank Badges
+   ========================================================================== */
+
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-weight: 800;
+  font-size: 0.875rem;
+}
+
+.rank-badge-1 {
+  background: var(--rank-gold);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.4);
+}
+
+.rank-badge-2 {
+  background: var(--rank-silver);
+  color: #374151;
+}
+
+.rank-badge-3 {
+  background: var(--rank-bronze);
+  color: #fff;
+}
+
+.rank-badge-default {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+/* Top 3 rank pulse */
+.rank-badge-top3 {
+  animation: rank-pulse 2s ease-in-out infinite;
+}
+
+@keyframes rank-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(249, 115, 22, 0); }
 }
 
 /* ==========================================================================
