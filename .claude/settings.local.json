@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(supabase --version:*)",
+      "mcp__sosumi__searchAppleDocumentation",
+      "WebSearch",
+      "Bash(cat:*)",
+      "mcp__filesystem__list_directory",
+      "mcp__filesystem__directory_tree",
+      "mcp__filesystem__read_text_file",
+      "mcp__puppeteer__puppeteer_navigate",
+      "mcp__puppeteer__puppeteer_screenshot",
+      "mcp__puppeteer__puppeteer_evaluate",
+      "mcp__puppeteer__puppeteer_click",
+      "mcp__filesystem__list_allowed_directories",
+      "mcp__filesystem__write_file"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
