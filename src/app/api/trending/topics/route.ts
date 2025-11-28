@@ -3,7 +3,7 @@ import { fetchUnifiedFeed } from '@/lib/trending';
 
 export interface TrendingTopic {
   tag: string;
-  count: number;
+  count: string;
   hot: boolean;
 }
 
